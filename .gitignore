@@ -1,0 +1,18 @@
+# Root
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.vercel/
+
+# Java / Maven
+backend/target/
+
+# Local environment files
+.env
+backend/.env
+frontend/.env
