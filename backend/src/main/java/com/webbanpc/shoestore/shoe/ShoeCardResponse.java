@@ -14,7 +14,10 @@ public record ShoeCardResponse(
         String secondaryImage,
         String categorySlug,
         String categoryName,
+        String campaignBadge,
         boolean featured,
         boolean newArrival,
-        boolean bestSeller) {
+        boolean bestSeller,
+        double averageRating,
+        long reviewCount) {
 }

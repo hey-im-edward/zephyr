@@ -16,14 +16,14 @@ Modern shoe-store workspace built around the ZEPHYR storefront and operations st
 docker compose up -d mysql
 ```
 
-2. Start backend:
+1. Start backend:
 
 ```bash
 cd backend
 ./mvnw spring-boot:run
 ```
 
-3. Start frontend:
+1. Start frontend:
 
 ```bash
 cd frontend

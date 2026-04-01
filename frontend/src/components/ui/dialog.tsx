@@ -17,7 +17,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-slate-950/72 backdrop-blur-sm", className)}
+    className={cn("fixed inset-0 z-50 bg-[rgba(16,32,53,0.18)] backdrop-blur-sm", className)}
     {...props}
   />
 ));
@@ -38,7 +38,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogClose className="absolute right-4 top-4 rounded-full p-2 text-white/60 transition hover:bg-white/8 hover:text-white">
+      <DialogClose className="absolute right-4 top-4 rounded-full p-2 text-[var(--foreground-dim)] transition hover:bg-white/52 hover:text-[var(--foreground)]">
         <X size={16} />
         <span className="sr-only">Đóng</span>
       </DialogClose>
@@ -52,7 +52,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn("font-display text-2xl font-semibold text-white", className)} {...props} />;
+  return <DialogPrimitive.Title className={cn("font-display text-2xl font-semibold text-[var(--foreground-hero)]", className)} {...props} />;
 }
 
 function DialogDescription({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Description>) {

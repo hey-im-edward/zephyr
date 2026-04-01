@@ -16,12 +16,14 @@ export function StorefrontSectionHeading({
   action,
   align = "left",
 }: StorefrontSectionHeadingProps) {
+  const titleWidthClass = align === "center" ? "max-w-[18ch] sm:max-w-[20ch]" : "max-w-[18ch] sm:max-w-[20ch]";
+
   return (
     <div className={cn("flex flex-col gap-4", align === "center" && "items-center text-center")}>
       <div className="eyebrow w-fit">{eyebrow}</div>
       <div className={cn("flex flex-col gap-3", align === "center" && "items-center")}>
-        <h2 className="display-section max-w-3xl">{title}</h2>
-        {description ? <p className="max-w-2xl text-sm leading-7 text-[var(--muted)]">{description}</p> : null}
+        <h2 className={cn("display-section leading-[1.02]", titleWidthClass)}>{title}</h2>
+        {description ? <p className="max-w-2xl text-sm leading-7 text-[var(--muted)] md:text-[0.96rem]">{description}</p> : null}
       </div>
       {action ? <div>{action}</div> : null}
     </div>

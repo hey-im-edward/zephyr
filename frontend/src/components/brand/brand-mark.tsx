@@ -14,56 +14,74 @@ export function BrandMark({ className, size = 52, shimmer = true }: BrandMarkPro
   const reduceMotion = useReducedMotion();
 
   return (
-    <div
-      className={cn(
-        "brand-mark relative isolate overflow-hidden rounded-[1.45rem] border border-[var(--line-strong)] bg-[var(--surface-brand)] shadow-[0_18px_70px_rgba(6,9,20,0.42)]",
-        className,
-      )}
-      style={{ width: size, height: size }}
-    >
+    <div className={cn("brand-mark-shell relative isolate", className)} style={{ width: size, height: size }}>
+      <div className="pointer-events-none absolute inset-[1px] rounded-[calc(1.15rem-1px)] bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(255,255,255,0.12))]" />
+      <div className="pointer-events-none absolute -left-[18%] top-[12%] h-[54%] w-[54%] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.76),transparent_72%)] blur-xl" />
+      <div className="pointer-events-none absolute bottom-[-12%] right-[-12%] h-[60%] w-[60%] rounded-full bg-[radial-gradient(circle,rgba(237,177,183,0.46),transparent_74%)] blur-2xl" />
+
       <svg
         viewBox="0 0 64 64"
         aria-hidden="true"
-        className="absolute inset-[11px] h-[calc(100%-22px)] w-[calc(100%-22px)]"
+        className="absolute inset-[14px] h-[calc(100%-28px)] w-[calc(100%-28px)]"
       >
         <path
-          d="M15 16.5H47.5L22 47.5H49"
+          d="M12 38C17 22 28 13 50 12"
           fill="none"
-          stroke="url(#zephyr-stroke)"
+          stroke="url(#zephyr-core)"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth="4.25"
+          strokeWidth="5.4"
+        />
+        <path
+          d="M14 48C24 42 34 33 44 19"
+          fill="none"
+          stroke="url(#zephyr-core-deep)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3.6"
+          opacity="0.9"
+        />
+        <path
+          d="M28 34C31 31.5 34 28 37.5 22.5"
+          fill="none"
+          stroke="#79d8ff"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2.1"
+          opacity="0.95"
         />
         <defs>
-          <linearGradient id="zephyr-stroke" x1="13" x2="51" y1="16" y2="48" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#FFF4E5" />
-            <stop offset="0.42" stopColor="#FDE68A" />
-            <stop offset="1" stopColor="#F9A8D4" />
+          <linearGradient id="zephyr-core" x1="12" x2="52" y1="12" y2="44" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#ffffff" />
+            <stop offset="0.42" stopColor="#79d8ff" />
+            <stop offset="1" stopColor="#d7c1ff" />
+          </linearGradient>
+          <linearGradient id="zephyr-core-deep" x1="12" x2="46" y1="48" y2="18" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#091426" />
+            <stop offset="1" stopColor="#4eaed8" />
           </linearGradient>
         </defs>
       </svg>
 
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_18%,rgba(255,255,255,0.2),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.1),rgba(255,255,255,0.01))]" />
-
       {shimmer ? (
         <motion.div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.32),transparent)] mix-blend-screen"
+          className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.34),transparent)] mix-blend-screen"
           animate={
             reduceMotion
               ? undefined
               : {
-                  x: ["-120%", "260%"],
+                  x: ["-105%", "210%"],
                 }
           }
           transition={
             reduceMotion
               ? undefined
               : {
-                  duration: 4.8,
+                  duration: 6.4,
                   ease: "easeInOut",
                   repeat: Number.POSITIVE_INFINITY,
-                  repeatDelay: 2.2,
+                  repeatDelay: 3.4,
                 }
           }
         />

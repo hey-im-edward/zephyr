@@ -3,8 +3,10 @@ package com.webbanpc.shoestore.category;
 import jakarta.validation.Valid;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.NonNull;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,13 +39,13 @@ public class AdminCategoryController {
     }
 
     @PutMapping("/{id}")
-    public CategoryResponse update(@PathVariable Long id, @Valid @RequestBody CategoryRequest request) {
-        return categoryService.update(id, request);
+    public CategoryResponse update(@PathVariable @NonNull Long id, @Valid @RequestBody CategoryRequest request) {
+        return categoryService.update(Objects.requireNonNull(id), request);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) {
-        categoryService.delete(id);
+    public void delete(@PathVariable @NonNull Long id) {
+        categoryService.delete(Objects.requireNonNull(id));
     }
 }

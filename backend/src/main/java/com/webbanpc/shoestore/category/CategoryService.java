@@ -1,7 +1,9 @@
 package com.webbanpc.shoestore.category;
 
 import java.util.List;
+import java.util.Objects;
 
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,13 +41,15 @@ public class CategoryService {
                 .heroTone(request.heroTone())
                 .build();
 
-        return toResponse(categoryRepository.save(category));
+        Category savedCategory = Objects.requireNonNull(categoryRepository.save(Objects.requireNonNull(category)));
+        return toResponse(savedCategory);
     }
 
     @Transactional
-    public CategoryResponse update(Long id, CategoryRequest request) {
-        Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
+    public CategoryResponse update(@NonNull Long id, CategoryRequest request) {
+        Long categoryId = Objects.requireNonNull(id);
+        Category category = Objects.requireNonNull(categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categoryId)));
 
         category.setName(request.name());
         category.setSlug(SlugUtils.slugify(request.name()));
@@ -56,15 +60,16 @@ public class CategoryService {
     }
 
     @Transactional
-    public void delete(Long id) {
-        Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
-        categoryRepository.delete(category);
+    public void delete(@NonNull Long id) {
+        Long categoryId = Objects.requireNonNull(id);
+        Category category = Objects.requireNonNull(categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categoryId)));
+        categoryRepository.delete(Objects.requireNonNull(category));
     }
 
-    private CategoryResponse toResponse(Category category) {
+    private CategoryResponse toResponse(@NonNull Category category) {
         return new CategoryResponse(
-                category.getId(),
+                Objects.requireNonNull(category.getId()),
                 category.getName(),
                 category.getSlug(),
                 category.getDescription(),

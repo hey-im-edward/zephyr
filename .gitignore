@@ -3,11 +3,15 @@
 Thumbs.db
 *.log
 .vscode/
+.playwright-cli/
+output/
 
 # Node / Next.js
 frontend/node_modules/
 frontend/.next/
 frontend/.vercel/
+frontend/storybook-static/
+frontend/src/stories/assets/
 
 # Java / Maven
 backend/target/

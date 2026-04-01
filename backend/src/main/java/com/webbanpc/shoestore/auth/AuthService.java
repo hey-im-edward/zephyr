@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.security.authentication.AuthenticationManager;
@@ -52,7 +53,7 @@ public class AuthService {
             throw new ConflictException("Email already exists");
         }
 
-        UserAccount user = userRepository.save(UserAccount.builder()
+        UserAccount newUser = UserAccount.builder()
                 .fullName(request.fullName().trim())
                 .email(email)
                 .phone(request.phone().trim())
@@ -60,25 +61,27 @@ public class AuthService {
                 .role(UserRole.USER)
                 .active(true)
                 .createdAt(LocalDateTime.now())
-                .build());
+                .build();
+        UserAccount user = Objects.requireNonNull(userRepository.save(Objects.requireNonNull(newUser)));
 
         return issueTokens(user);
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email().trim().toLowerCase(), request.password()));
 
-        UserAccount user = userRepository.findByEmail(request.email().trim().toLowerCase())
-                .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
+        UserAccount user = Objects.requireNonNull(userRepository.findByEmail(request.email().trim().toLowerCase())
+                .orElseThrow(() -> new UnauthorizedException("Invalid credentials")));
 
         return issueTokens(user);
     }
 
     @Transactional
     public AuthResponse refresh(RefreshRequest request) {
-        RefreshToken token = refreshTokenRepository.findByTokenHash(hash(request.refreshToken()))
-                .orElseThrow(() -> new UnauthorizedException("Refresh token is invalid"));
+        RefreshToken token = Objects.requireNonNull(refreshTokenRepository.findByTokenHash(hash(request.refreshToken()))
+                .orElseThrow(() -> new UnauthorizedException("Refresh token is invalid")));
 
         if (token.isRevoked() || token.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new UnauthorizedException("Refresh token has expired");
@@ -119,20 +122,22 @@ public class AuthService {
         String rawRefreshToken = UUID.randomUUID().toString() + UUID.randomUUID();
         LocalDateTime refreshExpiresAt = LocalDateTime.now().plusDays(jwtProperties.refreshTokenDays());
 
-        refreshTokenRepository.save(RefreshToken.builder()
+        RefreshToken newRefreshToken = RefreshToken.builder()
                 .user(user)
                 .tokenHash(hash(rawRefreshToken))
                 .expiresAt(refreshExpiresAt)
                 .revoked(false)
                 .createdAt(LocalDateTime.now())
-                .build());
+                .build();
+        RefreshToken refreshToken = Objects.requireNonNull(
+                refreshTokenRepository.save(Objects.requireNonNull(newRefreshToken)));
 
         return new AuthResponse(
                 accessToken.token(),
                 accessToken.expiresAt(),
                 rawRefreshToken,
                 refreshExpiresAt,
-                AuthUserResponse.from(user));
+                AuthUserResponse.from(refreshToken.getUser()));
     }
 
     private String hash(String value) {

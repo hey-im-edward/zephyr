@@ -1,0 +1,32 @@
+name: CI Backend
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-backend.yml"
+      - ".github/workflows/backend-checks.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-backend.yml"
+      - ".github/workflows/backend-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    uses: ./.github/workflows/backend-checks.yml
+    with:
+      working_directory: backend
+      java_version: "21"

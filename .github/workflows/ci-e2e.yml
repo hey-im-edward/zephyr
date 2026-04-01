@@ -1,0 +1,128 @@
+name: CI E2E
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/ci-e2e.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/ci-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: shoe_store
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/shoe_store?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_PROFILES_ACTIVE: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build backend
+        working-directory: backend
+        run: ./mvnw -B -DskipTests package
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          JAR_FILE="$(ls target/*.jar | head -n 1)"
+          nohup java -jar "$JAR_FILE" > ../backend-e2e.log 2>&1 &
+          echo $! > ../backend-e2e.pid
+
+      - name: Start frontend
+        working-directory: frontend
+        run: |
+          nohup npm run start -- --hostname 127.0.0.1 --port 3000 > ../frontend-e2e.log 2>&1 &
+          echo $! > ../frontend-e2e.pid
+
+      - name: Wait for services
+        run: |
+          for url in "http://127.0.0.1:8080/api/v1/home" "http://127.0.0.1:3000"; do
+            ready=0
+            for attempt in $(seq 1 60); do
+              if curl -fsS "$url" >/dev/null; then
+                ready=1
+                break
+              fi
+              sleep 5
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Timed out waiting for $url"
+              exit 1
+            fi
+          done
+
+      - name: Run smoke checks
+        run: |
+          curl -fsS http://127.0.0.1:8080/api/v1/home >/dev/null
+          curl -fsS http://127.0.0.1:3000 >/dev/null
+
+      - name: Install Playwright browsers
+        if: ${{ hashFiles('frontend/playwright.config.*') != '' || hashFiles('frontend/tests/e2e/**') != '' || hashFiles('frontend/vitest.config.ts') != '' }}
+        working-directory: frontend
+        run: npx playwright install --with-deps
+
+      - name: Run Storybook browser tests
+        if: ${{ hashFiles('frontend/vitest.config.ts') != '' }}
+        working-directory: frontend
+        run: npm run test:storybook
+
+      - name: Run Playwright tests
+        if: ${{ hashFiles('frontend/playwright.config.*') != '' || hashFiles('frontend/tests/e2e/**') != '' }}
+        working-directory: frontend
+        run: npx playwright test
+
+      - name: No Playwright suite found
+        if: ${{ hashFiles('frontend/playwright.config.*') == '' && hashFiles('frontend/tests/e2e/**') == '' }}
+        run: echo "Playwright suite not present yet; smoke checks completed."

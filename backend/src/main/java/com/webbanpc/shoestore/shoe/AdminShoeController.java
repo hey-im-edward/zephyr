@@ -3,8 +3,10 @@ package com.webbanpc.shoestore.shoe;
 import jakarta.validation.Valid;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.NonNull;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,8 +33,8 @@ public class AdminShoeController {
     }
 
     @GetMapping("/{id}")
-    public ShoeDetailResponse get(@PathVariable Long id) {
-        return shoeService.getById(id);
+    public ShoeDetailResponse get(@PathVariable @NonNull Long id) {
+        return shoeService.getById(Objects.requireNonNull(id));
     }
 
     @PostMapping
@@ -42,13 +44,13 @@ public class AdminShoeController {
     }
 
     @PutMapping("/{id}")
-    public ShoeDetailResponse update(@PathVariable Long id, @Valid @RequestBody ShoeRequest request) {
-        return shoeService.update(id, request);
+    public ShoeDetailResponse update(@PathVariable @NonNull Long id, @Valid @RequestBody ShoeRequest request) {
+        return shoeService.update(Objects.requireNonNull(id), request);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) {
-        shoeService.delete(id);
+    public void delete(@PathVariable @NonNull Long id) {
+        shoeService.delete(Objects.requireNonNull(id));
     }
 }

@@ -1,0 +1,63 @@
+name: Frontend Checks
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: Frontend workspace path
+        required: false
+        type: string
+        default: frontend
+      node_version:
+        description: Node.js version to use
+        required: false
+        type: string
+        default: "22"
+      run_typecheck:
+        description: Whether to run TypeScript type checking
+        required: false
+        type: boolean
+        default: true
+      run_build:
+        description: Whether to run the production build
+        required: false
+        type: boolean
+        default: true
+      run_storybook_build:
+        description: Whether to build Storybook for component docs and visual review
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working_directory }}/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+        if: ${{ inputs.run_typecheck }}
+
+      - run: npm run build
+        if: ${{ inputs.run_build }}
+
+      - run: npm run build-storybook
+        if: ${{ inputs.run_storybook_build }}

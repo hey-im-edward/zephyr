@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 
 export function AdminLoadingState() {
   return (
-    <div className="mx-auto flex max-w-7xl items-center justify-center px-6 py-24">
-      <div className="flex items-center gap-3 text-white/68">
+    <div className="mx-auto flex min-h-[56vh] max-w-7xl items-center justify-center px-6 py-24">
+      <div className="flex items-center gap-3 text-[var(--muted)]">
         <LoaderCircle className="h-5 w-5 animate-spin" />
         <span>Đang tải không gian quản trị...</span>
       </div>
@@ -17,7 +17,7 @@ export function AdminLoadingState() {
 
 export function AdminLoginRequiredState() {
   return (
-    <div className="mx-auto max-w-5xl px-6 py-16">
+    <div className="mx-auto flex min-h-[62vh] max-w-5xl items-center px-6 py-16">
       <AdminPanel>
         <AdminPanelHeader
           title="Khu vận hành ZEPHYR"
@@ -25,11 +25,11 @@ export function AdminLoginRequiredState() {
         />
         <AdminPanelBody className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/55">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/56 px-4 py-2 text-xs uppercase tracking-[0.22em] text-[var(--foreground-dim)]">
               <ShieldCheck className="h-4 w-4" />
-              Admin access
+              quyền quản trị
             </div>
-            <p className="max-w-2xl text-sm leading-7 text-white/58">
+            <p className="max-w-2xl text-sm leading-7 text-[var(--muted)]">
               Giao diện này ưu tiên độ rõ ràng, độ tương phản và tốc độ xử lý. Bạn cần quyền admin để tiếp tục.
             </p>
           </div>
@@ -47,7 +47,7 @@ export function AdminLoginRequiredState() {
 
 export function AdminForbiddenState() {
   return (
-    <div className="mx-auto max-w-5xl px-6 py-16">
+    <div className="mx-auto flex min-h-[62vh] max-w-5xl items-center px-6 py-16">
       <AdminPanel>
         <AdminPanelHeader
           title="Tài khoản hiện tại không có quyền admin"

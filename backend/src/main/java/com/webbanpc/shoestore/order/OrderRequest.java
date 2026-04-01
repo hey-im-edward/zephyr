@@ -16,5 +16,7 @@ public record OrderRequest(
         @NotBlank String city,
         String notes,
         @NotNull PaymentMethod paymentMethod,
+        String shippingMethodSlug,
+        String promotionCode,
         @NotEmpty List<@Valid OrderItemRequest> items) {
 }

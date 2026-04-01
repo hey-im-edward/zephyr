@@ -1,0 +1,46 @@
+package com.webbanpc.shoestore.recommendation;
+
+import com.webbanpc.shoestore.shoe.Shoe;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Entity
+@Table(name = "shoe_recommendations")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ShoeRecommendation {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_shoe_id", nullable = false)
+    private Shoe sourceShoe;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_shoe_id", nullable = false)
+    private Shoe targetShoe;
+
+    @Column(name = "reason_label", nullable = false, length = 80)
+    private String reasonLabel;
+
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
+}

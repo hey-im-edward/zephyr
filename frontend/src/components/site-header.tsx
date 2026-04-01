@@ -7,7 +7,6 @@ import {
   ShoppingBag,
   LogIn,
   LogOut,
-  Sparkles,
   LayoutGrid,
   CircleUserRound,
 } from "@/components/icons";
@@ -38,114 +37,125 @@ export function SiteHeader() {
   const router = useRouter();
   const { itemCount } = useCart();
   const { user, isAuthenticated, isAdmin, logoutAction } = useAuth();
-  const showDesignSystem =
-    process.env.NEXT_PUBLIC_ENABLE_INTERNAL_UI_DOCS === "true" || process.env.NODE_ENV !== "production";
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/8 bg-[rgba(4,6,12,0.78)] backdrop-blur-2xl">
-      <div className="page-frame">
-        <div className="flex items-center justify-between gap-4 py-3 text-[11px] uppercase tracking-[0.24em] text-[var(--foreground-dim)]">
-          <div className="hidden items-center gap-2 md:inline-flex">
-            <Sparkles size={14} />
-            Giao diện kính mờ cho bộ sưu tập giày được tuyển chọn
-          </div>
-          <div className="inline-flex items-center gap-2">
-            <span>Tồn kho theo size rõ ràng</span>
-            <span className="h-1 w-1 rounded-full bg-[var(--brand-gold)]" />
-            <span>Xưởng giày đương đại</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <Link href="/" className="min-w-0">
-            <BrandMark showTagline compact />
-          </Link>
-
-          <nav className="scrollbar-thin flex items-center gap-2 overflow-x-auto pb-1 lg:justify-center">
-            {links.map((link) => {
-              const active = pathname === link.href;
-              const Icon = link.icon;
-              return (
-                <Button
-                  key={link.href}
-                  asChild
-                  size="sm"
-                  variant={active ? "default" : "ghost"}
-                  className={cn("shrink-0", active ? "text-[var(--brand-ink)]" : "text-[var(--muted-strong)]")}
+    <header className="sticky top-0 z-50">
+      <div className="page-shell pt-4">
+        <div className="page-frame">
+          <div className="surface-panel overflow-hidden rounded-[2.6rem] px-4 py-4 lg:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center justify-between gap-3">
+                <Link
+                  href="/"
+                  className="glass-panel min-w-0 rounded-full px-3 py-2 transition hover:border-white"
                 >
-                  <Link href={link.href}>
-                    <Icon size={16} className={active ? "opacity-100" : "opacity-70"} />
-                    {link.label}
+                  <BrandMark showTagline compact />
+                </Link>
+
+                <Button asChild variant="secondary" size="sm" className="sm:hidden">
+                  <Link href="/checkout">
+                    <ShoppingBag size={16} />
+                    {itemCount}
                   </Link>
                 </Button>
-              );
-            })}
+              </div>
 
-            {showDesignSystem ? (
-              <Button asChild size="sm" variant="ghost" className="shrink-0 text-[var(--muted-strong)]">
-                <Link href="/design-system">Hệ thiết kế</Link>
-              </Button>
-            ) : null}
-          </nav>
+              <nav className="scrollbar-thin flex items-center gap-2 overflow-x-auto lg:justify-center">
+                <div className="flex items-center gap-1 overflow-hidden rounded-full border border-white/70 bg-white/18 p-1.5 shadow-[0_18px_40px_rgba(106,136,182,0.10)] backdrop-blur-[18px]">
+                  {links.map((link) => {
+                    const active = pathname === link.href;
+                    const Icon = link.icon;
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={cn(
+                          "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-semibold transition duration-300",
+                          active
+                            ? "liquid-button-shell text-[var(--foreground-hero)]"
+                            : "text-[var(--muted)] hover:bg-white/24 hover:text-[var(--foreground)]",
+                        )}
+                      >
+                        <Icon size={16} />
+                        {link.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </nav>
 
-          <div className="flex items-center gap-2">
-            <Button asChild variant="secondary" size="sm" className="hidden sm:inline-flex">
-              <Link href="/checkout">
-                <ShoppingBag size={16} />
-                Giỏ hàng ({itemCount})
-              </Link>
-            </Button>
+              <div className="flex items-center justify-end gap-2">
+                <Link
+                  href="/checkout"
+                  className="hidden h-[3.25rem] w-[12.75rem] items-center justify-between gap-3 rounded-full border border-white/70 bg-white/18 px-4 text-sm font-medium text-[var(--foreground)] shadow-[0_14px_32px_rgba(106,136,182,0.08)] backdrop-blur-[18px] transition hover:border-white sm:inline-flex"
+                >
+                  <span className="inline-flex items-center gap-3">
+                    <ShoppingBag size={16} />
+                    <span>Giỏ hàng</span>
+                  </span>
+                  <span className="rounded-full border border-white/72 bg-white/36 px-2 py-0.5 text-[10px] font-semibold text-inherit">
+                    {itemCount}
+                  </span>
+                </Link>
 
-            {!isAuthenticated ? (
-              <>
-                <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-                  <Link href="/dang-ky">Đăng ký</Link>
-                </Button>
-                <Button asChild size="sm">
-                  <Link href="/dang-nhap">
-                    <LogIn size={16} />
-                    Đăng nhập
-                  </Link>
-                </Button>
-              </>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="inline-flex items-center gap-3 rounded-full border border-white/12 bg-white/7 px-2 py-2 text-white transition hover:border-white/25 hover:bg-white/10">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback>{initials(user?.fullName ?? "Z")}</AvatarFallback>
-                    </Avatar>
-                    <div className="hidden text-left sm:block">
-                      <div className="max-w-32 truncate text-sm font-medium">{user?.fullName}</div>
-                      <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">
-                        {isAdmin ? "Admin" : "Thành viên"}
-                      </div>
-                    </div>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuItem onClick={() => router.push("/tai-khoan")}>
-                    <CircleUserRound size={16} />
-                    Tài khoản
-                  </DropdownMenuItem>
-                  {isAdmin ? (
-                    <DropdownMenuItem onClick={() => router.push("/admin")}>
-                      <LayoutGrid size={16} />
-                      Quản trị
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      void logoutAction().then(() => router.push("/"));
-                    }}
-                  >
-                    <LogOut size={16} />
-                    Đăng xuất
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                {!isAuthenticated ? (
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href="/dang-ky"
+                      className="hidden h-[3.25rem] items-center rounded-full border border-white/70 bg-white/18 px-5 text-sm font-medium text-[var(--foreground)] shadow-[0_14px_32px_rgba(106,136,182,0.08)] backdrop-blur-[18px] transition hover:border-white sm:inline-flex"
+                    >
+                      Đăng ký
+                    </Link>
+                    <Link
+                      href="/dang-nhap"
+                      className="inline-flex h-[3.25rem] items-center gap-3 rounded-full border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.36),rgba(171,228,255,0.26)_46%,rgba(196,181,253,0.26))] px-5 text-sm font-medium text-[var(--foreground-hero)] shadow-[0_18px_36px_rgba(126,154,220,0.14)] backdrop-blur-[22px] transition hover:border-white"
+                    >
+                      <LogIn size={16} />
+                      Đăng nhập
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="glass-panel flex items-center justify-end gap-2 rounded-full p-1.5">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="glass-panel inline-flex h-[3.25rem] w-[12.75rem] items-center justify-between gap-3 rounded-full px-2 py-2 text-[var(--foreground)] transition hover:border-white">
+                          <Avatar className="h-9 w-9">
+                            <AvatarFallback>{initials(user?.fullName ?? "Z")}</AvatarFallback>
+                          </Avatar>
+                          <div className="hidden min-w-0 flex-1 text-left sm:block">
+                            <div className="max-w-32 truncate text-sm font-semibold">{user?.fullName}</div>
+                            <div className="text-[10px] uppercase tracking-[0.22em] text-[var(--foreground-dim)]">
+                              {isAdmin ? "Quản trị" : "Tài khoản"}
+                            </div>
+                          </div>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64">
+                        <DropdownMenuItem onClick={() => router.push(isAdmin ? "/admin/ho-so" : "/tai-khoan")}>
+                          <CircleUserRound size={16} />
+                          {isAdmin ? "Hồ sơ quản trị" : "Tài khoản"}
+                        </DropdownMenuItem>
+                        {isAdmin ? (
+                          <DropdownMenuItem onClick={() => router.push("/admin")}>
+                            <LayoutGrid size={16} />
+                            Bảng quản trị
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            void logoutAction().then(() => router.push("/"));
+                          }}
+                        >
+                          <LogOut size={16} />
+                          Đăng xuất
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

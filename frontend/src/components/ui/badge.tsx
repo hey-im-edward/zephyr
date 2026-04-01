@@ -4,15 +4,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
+  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
   {
     variants: {
       variant: {
-        default: "border-[rgba(229,199,139,0.2)] bg-[rgba(229,199,139,0.16)] text-[var(--brand-soft)]",
-        secondary: "border-white/12 bg-white/8 text-white",
-        success: "border-emerald-400/18 bg-emerald-400/14 text-emerald-100",
-        warning: "border-[rgba(243,193,113,0.2)] bg-[rgba(243,193,113,0.16)] text-[var(--warning)]",
-        danger: "border-[rgba(255,125,139,0.24)] bg-[rgba(255,125,139,0.14)] text-[#ffd4da]",
+        default: "border-white/56 bg-[linear-gradient(180deg,rgba(255,255,255,0.24),rgba(255,255,255,0.08))] text-[#245b86]",
+        secondary: "border-white/52 bg-[linear-gradient(180deg,rgba(255,255,255,0.18),rgba(255,255,255,0.06))] text-[var(--foreground)]",
+        success: "border-white/52 bg-[rgba(97,171,136,0.14)] text-[var(--success)]",
+        warning: "border-white/56 bg-[rgba(121,216,255,0.18)] text-[#245b86]",
+        danger: "border-white/56 bg-[rgba(220,87,109,0.14)] text-[var(--danger)]",
       },
     },
     defaultVariants: {

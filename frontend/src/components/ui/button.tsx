@@ -7,19 +7,19 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold transition duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "bg-[linear-gradient(135deg,var(--brand-gold),#c9aa77_52%,var(--brand-rose))] text-[var(--brand-ink)] shadow-[0_18px_48px_rgba(194,155,106,0.26)] hover:-translate-y-0.5 hover:brightness-105",
+          "liquid-button-shell text-[var(--foreground-hero)] hover:-translate-y-0.5 hover:border-white/80 hover:brightness-[1.03]",
         secondary:
-          "border border-white/12 bg-white/8 text-white hover:border-white/25 hover:bg-white/12",
+          "liquid-button-shell liquid-button-shell-secondary text-[var(--foreground)] hover:-translate-y-0.5 hover:border-white/76",
         outline:
-          "border border-white/16 bg-transparent text-white hover:border-white/30 hover:bg-white/6",
-        ghost: "text-white/76 hover:bg-white/8 hover:text-white",
+          "border border-white/56 bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.04))] text-[var(--foreground)] backdrop-blur-[18px] hover:border-white/74 hover:bg-white/12",
+        ghost: "border border-transparent bg-transparent text-[var(--foreground)] hover:border-white/40 hover:bg-white/12",
         destructive:
-          "border border-[rgba(255,125,139,0.6)] bg-[linear-gradient(180deg,#ff7d8b,#e65063)] text-white shadow-[0_18px_38px_rgba(230,80,99,0.18)] hover:-translate-y-0.5 hover:brightness-105",
+          "border border-[rgba(220,87,109,0.24)] bg-[linear-gradient(180deg,#ef8899,#dc576d)] text-white shadow-[0_18px_38px_rgba(220,87,109,0.16)] hover:-translate-y-0.5 hover:brightness-105",
       },
       size: {
         default: "h-11 px-5",

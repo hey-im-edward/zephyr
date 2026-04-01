@@ -3,15 +3,18 @@ package com.webbanpc.shoestore.shoe;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.lang.NonNull;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.webbanpc.shoestore.category.Category;
 import com.webbanpc.shoestore.category.CategoryService;
 import com.webbanpc.shoestore.common.ResourceNotFoundException;
 import com.webbanpc.shoestore.common.SlugUtils;
+import com.webbanpc.shoestore.review.ReviewService;
 
 @Service
 @Transactional(readOnly = true)
@@ -19,10 +22,12 @@ public class ShoeService {
 
     private final ShoeRepository shoeRepository;
     private final CategoryService categoryService;
+    private final ReviewService reviewService;
 
-    public ShoeService(ShoeRepository shoeRepository, CategoryService categoryService) {
+    public ShoeService(ShoeRepository shoeRepository, CategoryService categoryService, ReviewService reviewService) {
         this.shoeRepository = shoeRepository;
         this.categoryService = categoryService;
+        this.reviewService = reviewService;
     }
 
     public List<ShoeCardResponse> search(String categorySlug, Boolean featured, String query) {
@@ -45,12 +50,12 @@ public class ShoeService {
         Shoe shoe = shoeRepository.findBySlug(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + slug));
 
-        return toDetailResponse(shoe);
+        return toDetailResponse(Objects.requireNonNull(shoe));
     }
 
-    public ShoeDetailResponse getById(Long id) {
-        Shoe shoe = shoeRepository.findWithDetailsById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + id));
+    public ShoeDetailResponse getById(@NonNull Long id) {
+        Shoe shoe = Objects.requireNonNull(shoeRepository.findWithDetailsById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + id)));
 
         return toDetailResponse(shoe);
     }
@@ -80,13 +85,14 @@ public class ShoeService {
                 .build();
         syncSizeStocks(shoe, request.sizeStocks());
 
-        return toDetailResponse(shoeRepository.save(shoe));
+        Shoe savedShoe = Objects.requireNonNull(shoeRepository.save(Objects.requireNonNull(shoe)));
+        return toDetailResponse(savedShoe);
     }
 
     @Transactional
-    public ShoeDetailResponse update(Long id, ShoeRequest request) {
-        Shoe shoe = shoeRepository.findWithDetailsById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + id));
+    public ShoeDetailResponse update(@NonNull Long id, ShoeRequest request) {
+        Shoe shoe = Objects.requireNonNull(shoeRepository.findWithDetailsById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + id)));
 
         Category category = categoryService.findEntityBySlug(request.categorySlug());
 
@@ -113,15 +119,15 @@ public class ShoeService {
     }
 
     @Transactional
-    public void delete(Long id) {
-        Shoe shoe = shoeRepository.findWithDetailsById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + id));
-        shoeRepository.delete(shoe);
+    public void delete(@NonNull Long id) {
+        Shoe shoe = Objects.requireNonNull(shoeRepository.findWithDetailsById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + id)));
+        shoeRepository.delete(Objects.requireNonNull(shoe));
     }
 
-    private ShoeCardResponse toCardResponse(Shoe shoe) {
+    private ShoeCardResponse toCardResponse(@NonNull Shoe shoe) {
         return new ShoeCardResponse(
-                shoe.getId(),
+                Objects.requireNonNull(shoe.getId()),
                 shoe.getName(),
                 shoe.getSlug(),
                 shoe.getBrand(),
@@ -132,14 +138,17 @@ public class ShoeService {
                 shoe.getSecondaryImage(),
                 shoe.getCategory().getSlug(),
                 shoe.getCategory().getName(),
+                fallbackCampaignBadge(shoe),
                 shoe.isFeatured(),
                 shoe.isNewArrival(),
-                shoe.isBestSeller());
+                shoe.isBestSeller(),
+                reviewService.averageRating(shoe.getId()),
+                reviewService.reviewCount(shoe.getId()));
     }
 
-    private ShoeDetailResponse toDetailResponse(Shoe shoe) {
+    private ShoeDetailResponse toDetailResponse(@NonNull Shoe shoe) {
         return new ShoeDetailResponse(
-                shoe.getId(),
+                Objects.requireNonNull(shoe.getId()),
                 shoe.getSku(),
                 shoe.getName(),
                 shoe.getSlug(),
@@ -150,24 +159,39 @@ public class ShoeService {
                 shoe.getPrice(),
                 shoe.getPrimaryImage(),
                 shoe.getSecondaryImage(),
+                galleryImages(shoe),
+                shoe.getVideoUrl(),
                 availableSizes(shoe),
                 sizeStockResponses(shoe),
                 splitField(shoe.getAccentColors()),
                 splitField(shoe.getHighlights()),
+                shoe.getFitNote() != null ? shoe.getFitNote() : defaultFitNote(shoe),
+                shoe.getDeliveryNote() != null ? shoe.getDeliveryNote() : defaultDeliveryNote(),
+                fallbackCampaignBadge(shoe),
                 shoe.getCategory().getSlug(),
                 shoe.getCategory().getName(),
                 shoe.isFeatured(),
                 shoe.isNewArrival(),
                 shoe.isBestSeller(),
                 totalStock(shoe),
-                totalStock(shoe) > 0);
+                totalStock(shoe) > 0,
+                reviewService.averageRating(shoe.getId()),
+                reviewService.reviewCount(shoe.getId()));
     }
 
     private List<String> splitField(String input) {
+        if (input == null || input.isBlank()) {
+            return List.of();
+        }
         return Arrays.stream(input.split("\\|"))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .toList();
+    }
+
+    private List<String> galleryImages(Shoe shoe) {
+        List<String> images = splitField(shoe.getGalleryImages());
+        return images.isEmpty() ? List.of(shoe.getPrimaryImage(), shoe.getSecondaryImage()) : images;
     }
 
     private void syncSizeStocks(Shoe shoe, List<SizeStockRequest> sizeStocks) {
@@ -228,5 +252,35 @@ public class ShoeService {
                 return Integer.MAX_VALUE;
             }
         }).thenComparing(String::trim);
+    }
+
+    private String fallbackCampaignBadge(Shoe shoe) {
+        if (shoe.getCampaignBadge() != null && !shoe.getCampaignBadge().isBlank()) {
+            return shoe.getCampaignBadge();
+        }
+        if (shoe.isFeatured()) {
+            return "Zephyr Select";
+        }
+        if (shoe.isNewArrival()) {
+            return "New Season";
+        }
+        if (shoe.isBestSeller()) {
+            return "Top Seller";
+        }
+        return "Curated Pair";
+    }
+
+    private String defaultFitNote(Shoe shoe) {
+        if ("trail".equalsIgnoreCase(shoe.getCategory().getSlug())) {
+            return "Phom ôm chắc để giữ bàn chân ổn định trên bề mặt hỗn hợp.";
+        }
+        if ("running".equalsIgnoreCase(shoe.getCategory().getSlug())) {
+            return "Nên đi đúng size thường dùng để giữ nhịp chuyển động tự nhiên.";
+        }
+        return "Phom cân bằng cho nhu cầu mặc hằng ngày, ưu tiên true-to-size.";
+    }
+
+    private String defaultDeliveryNote() {
+        return "Hỗ trợ giao nhanh nội thành, đổi size theo tồn kho và giữ trải nghiệm sau mua rõ ràng.";
     }
 }

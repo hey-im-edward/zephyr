@@ -1,0 +1,45 @@
+{
+  "properties": [
+    {
+      "name": "app.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "sourceType": "com.webbanpc.shoestore.config.CorsProperties",
+      "description": "Danh sách origin được phép gọi API backend.",
+      "defaultValue": "http://localhost:3000"
+    },
+    {
+      "name": "app.admin.username",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.config.AdminProperties",
+      "description": "Email tài khoản admin mặc định được seed khi backend khởi động.",
+      "defaultValue": "admin@zephyr.vn"
+    },
+    {
+      "name": "app.admin.password",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.config.AdminProperties",
+      "description": "Mật khẩu tài khoản admin mặc định được seed khi backend khởi động.",
+      "defaultValue": "change-me-now"
+    },
+    {
+      "name": "app.jwt.secret",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.auth.JwtProperties",
+      "description": "Secret key dùng để ký JWT access token và refresh token."
+    },
+    {
+      "name": "app.jwt.access-token-minutes",
+      "type": "java.lang.Long",
+      "sourceType": "com.webbanpc.shoestore.auth.JwtProperties",
+      "description": "Số phút hiệu lực của access token.",
+      "defaultValue": 30
+    },
+    {
+      "name": "app.jwt.refresh-token-days",
+      "type": "java.lang.Long",
+      "sourceType": "com.webbanpc.shoestore.auth.JwtProperties",
+      "description": "Số ngày hiệu lực của refresh token.",
+      "defaultValue": 14
+    }
+  ]
+}

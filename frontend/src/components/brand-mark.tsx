@@ -13,5 +13,5 @@ export function BrandMark({ className, compact = false, showTagline = false }: B
     return <BrandLockup className={className} compact={compact} showTagline />;
   }
 
-  return <PrimitiveBrandMark className={cn(className)} size={compact ? 46 : 52} />;
+  return <PrimitiveBrandMark className={cn(className)} size={compact ? 44 : 52} />;
 }

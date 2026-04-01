@@ -3,6 +3,7 @@ package com.webbanpc.shoestore.order;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -12,9 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.webbanpc.shoestore.common.BadRequestException;
 import com.webbanpc.shoestore.common.ResourceNotFoundException;
+import com.webbanpc.shoestore.promotion.Promotion;
+import com.webbanpc.shoestore.promotion.PromotionService;
 import com.webbanpc.shoestore.shoe.Shoe;
 import com.webbanpc.shoestore.shoe.ShoeRepository;
 import com.webbanpc.shoestore.shoe.ShoeSizeStock;
+import com.webbanpc.shoestore.shipping.ShippingMethod;
+import com.webbanpc.shoestore.shipping.ShippingMethodService;
 import com.webbanpc.shoestore.user.UserAccount;
 
 @Service
@@ -23,14 +28,32 @@ public class OrderService {
 
     private final CustomerOrderRepository customerOrderRepository;
     private final ShoeRepository shoeRepository;
+    private final ShippingMethodService shippingMethodService;
+    private final PromotionService promotionService;
+    private final OrderStatusHistoryRepository orderStatusHistoryRepository;
 
-    public OrderService(CustomerOrderRepository customerOrderRepository, ShoeRepository shoeRepository) {
+    public OrderService(
+            CustomerOrderRepository customerOrderRepository,
+            ShoeRepository shoeRepository,
+            ShippingMethodService shippingMethodService,
+            PromotionService promotionService,
+            OrderStatusHistoryRepository orderStatusHistoryRepository) {
         this.customerOrderRepository = customerOrderRepository;
         this.shoeRepository = shoeRepository;
+        this.shippingMethodService = shippingMethodService;
+        this.promotionService = promotionService;
+        this.orderStatusHistoryRepository = orderStatusHistoryRepository;
     }
 
     @Transactional
     public OrderResponse create(UserAccount user, OrderRequest request) {
+        ShippingMethod shippingMethod = request.shippingMethodSlug() != null && !request.shippingMethodSlug().isBlank()
+                ? shippingMethodService.findEntityBySlug(request.shippingMethodSlug())
+                : null;
+        Promotion promotion = request.promotionCode() != null && !request.promotionCode().isBlank()
+                ? promotionService.findEntityByCode(request.promotionCode().trim().toUpperCase())
+                : null;
+
         CustomerOrder order = CustomerOrder.builder()
                 .user(user)
                 .orderCode(generateOrderCode())
@@ -42,7 +65,12 @@ public class OrderService {
                 .notes(request.notes())
                 .status(OrderStatus.PENDING)
                 .paymentMethod(request.paymentMethod() == null ? PaymentMethod.COD : request.paymentMethod())
+                .shippingMethod(shippingMethod)
+                .promotion(promotion)
                 .totalAmount(BigDecimal.ZERO)
+                .shippingFee(shippingMethod != null ? shippingMethod.getFee() : BigDecimal.ZERO)
+                .discountAmount(BigDecimal.ZERO)
+                .deliveryWindow(shippingMethod != null ? shippingMethod.getEtaLabel() : null)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -73,8 +101,19 @@ public class OrderService {
                     .build());
         }
 
-        order.setTotalAmount(totalAmount);
+        BigDecimal discountAmount = promotion != null
+                ? totalAmount.multiply(BigDecimal.valueOf(0.08)).setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        order.setDiscountAmount(discountAmount);
+        order.setTotalAmount(totalAmount.add(order.getShippingFee()).subtract(discountAmount));
         CustomerOrder savedOrder = customerOrderRepository.save(order);
+        orderStatusHistoryRepository.save(OrderStatusHistory.builder()
+                .order(savedOrder)
+                .status(OrderStatus.PENDING)
+                .note("Order created")
+                .createdAt(LocalDateTime.now())
+                .build());
         return toResponse(savedOrder);
     }
 
@@ -134,6 +173,12 @@ public class OrderService {
 
         order.setStatus(nextStatus);
         order.setUpdatedAt(LocalDateTime.now());
+        orderStatusHistoryRepository.save(OrderStatusHistory.builder()
+                .order(order)
+                .status(nextStatus)
+                .note("Status updated from " + previousStatus + " to " + nextStatus)
+                .createdAt(LocalDateTime.now())
+                .build());
         return toDetailResponse(order);
     }
 
@@ -176,7 +221,12 @@ public class OrderService {
                 order.getEmail(),
                 order.getStatus(),
                 order.getPaymentMethod(),
+                order.getShippingMethod() != null ? order.getShippingMethod().getName() : null,
+                order.getPromotion() != null ? order.getPromotion().getCode() : null,
                 order.getTotalAmount(),
+                order.getShippingFee(),
+                order.getDiscountAmount(),
+                order.getDeliveryWindow(),
                 order.getCreatedAt());
     }
 
@@ -193,6 +243,11 @@ public class OrderService {
                 order.getStatus(),
                 order.getPaymentMethod(),
                 order.getTotalAmount(),
+                order.getShippingMethod() != null ? order.getShippingMethod().getName() : null,
+                order.getPromotion() != null ? order.getPromotion().getCode() : null,
+                order.getShippingFee(),
+                order.getDiscountAmount(),
+                order.getDeliveryWindow(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
                 order.getItems().stream()

@@ -1,0 +1,57 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    env:
+      PRODUCTION_DEPLOY_URL: ${{ vars.PRODUCTION_DEPLOY_URL }}
+      PRODUCTION_DEPLOY_TOKEN: ${{ secrets.PRODUCTION_DEPLOY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build backend
+        working-directory: backend
+        run: ./mvnw -B -DskipTests package
+
+      - name: Deploy production
+        run: |
+          if [ -z "$PRODUCTION_DEPLOY_URL" ]; then
+            echo "PRODUCTION_DEPLOY_URL is not set; production deploy is a placeholder."
+            exit 0
+          fi
+          echo "Deploying production to $PRODUCTION_DEPLOY_URL"
+          if [ -n "$PRODUCTION_DEPLOY_TOKEN" ]; then
+            echo "Production deploy token is available."
+          fi

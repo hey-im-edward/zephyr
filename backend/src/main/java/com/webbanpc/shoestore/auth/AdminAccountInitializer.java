@@ -1,7 +1,7 @@
 package com.webbanpc.shoestore.auth;
 
 import java.time.LocalDateTime;
-
+import java.util.Objects;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,7 +34,7 @@ public class AdminAccountInitializer implements ApplicationRunner {
                 .ifPresentOrElse(this::refreshAdminAccount, this::createAdminAccount);
     }
 
-    private void refreshAdminAccount(UserAccount adminAccount) {
+    private void refreshAdminAccount(@org.springframework.lang.NonNull UserAccount adminAccount) {
         adminAccount.setFullName("ZEPHYR Admin");
         adminAccount.setPhone("0900000000");
         adminAccount.setRole(UserRole.ADMIN);
@@ -43,7 +43,7 @@ public class AdminAccountInitializer implements ApplicationRunner {
     }
 
     private void createAdminAccount() {
-        userRepository.save(UserAccount.builder()
+        UserAccount adminAccount = UserAccount.builder()
                 .fullName("ZEPHYR Admin")
                 .email(adminProperties.username())
                 .phone("0900000000")
@@ -51,6 +51,7 @@ public class AdminAccountInitializer implements ApplicationRunner {
                 .role(UserRole.ADMIN)
                 .active(true)
                 .createdAt(LocalDateTime.now())
-                .build());
+                .build();
+        userRepository.save(Objects.requireNonNull(adminAccount));
     }
 }

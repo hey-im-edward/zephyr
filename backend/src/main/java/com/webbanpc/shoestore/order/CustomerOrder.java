@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.math.BigDecimal;
 
+import com.webbanpc.shoestore.promotion.Promotion;
+import com.webbanpc.shoestore.shipping.ShippingMethod;
 import com.webbanpc.shoestore.user.UserAccount;
 
 import jakarta.persistence.CascadeType;
@@ -72,8 +74,25 @@ public class CustomerOrder {
     @Column(name = "payment_method", nullable = false, length = 30)
     private PaymentMethod paymentMethod;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shipping_method_id")
+    private ShippingMethod shippingMethod;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "promotion_id")
+    private Promotion promotion;
+
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
+
+    @Column(name = "shipping_fee", nullable = false, precision = 12, scale = 2)
+    private BigDecimal shippingFee;
+
+    @Column(name = "discount_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal discountAmount;
+
+    @Column(name = "delivery_window", length = 80)
+    private String deliveryWindow;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

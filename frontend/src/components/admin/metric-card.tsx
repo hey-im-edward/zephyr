@@ -24,18 +24,18 @@ const tintClasses: Record<MetricCardProps["tint"], string> = {
 
 export function MetricCard({ label, value, note, icon: Icon, tint, currency = false }: MetricCardProps) {
   return (
-    <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(8,14,27,0.98),rgba(5,10,21,0.95))] p-5">
+    <div className="relative overflow-hidden rounded-[1.75rem] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.86),rgba(246,249,255,0.72))] p-5">
       <div className={cn("absolute inset-x-0 top-0 h-20 bg-gradient-to-br opacity-85", tintClasses[tint])} />
       <div className="relative flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <div className="text-[11px] uppercase tracking-[0.24em] text-white/42">{label}</div>
-          <div className="font-display text-4xl font-semibold text-white">
+          <div className="text-[11px] uppercase tracking-[0.24em] text-[var(--foreground-dim)]">{label}</div>
+          <div className="font-display text-4xl font-semibold text-[var(--foreground-hero)]">
             {currency && typeof value === "number" ? formatVnd(value) : value}
           </div>
-          {note ? <div className="text-sm leading-6 text-white/56">{note}</div> : null}
+          {note ? <div className="text-sm leading-6 text-[var(--muted)]">{note}</div> : null}
         </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] border border-white/12 bg-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-          <Icon className="h-5 w-5 text-white" />
+        <div className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] border border-[var(--line)] bg-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <Icon className="h-5 w-5 text-[var(--foreground-hero)]" />
         </div>
       </div>
     </div>

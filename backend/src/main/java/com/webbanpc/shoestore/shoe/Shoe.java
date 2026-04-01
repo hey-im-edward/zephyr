@@ -67,6 +67,12 @@ public class Shoe {
     @Column(name = "secondary_image", nullable = false, length = 255)
     private String secondaryImage;
 
+    @Column(name = "gallery_images", columnDefinition = "TEXT")
+    private String galleryImages;
+
+    @Column(name = "video_url", length = 255)
+    private String videoUrl;
+
     @Column(name = "available_sizes", nullable = false, length = 120)
     private String availableSizes;
 
@@ -75,6 +81,15 @@ public class Shoe {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String highlights;
+
+    @Column(name = "fit_note", length = 255)
+    private String fitNote;
+
+    @Column(name = "delivery_note", length = 255)
+    private String deliveryNote;
+
+    @Column(name = "campaign_badge", length = 80)
+    private String campaignBadge;
 
     @Column(nullable = false)
     private boolean featured;

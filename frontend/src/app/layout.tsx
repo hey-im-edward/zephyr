@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro, Cormorant_Garamond } from "next/font/google";
+import { Inter, Sora } from "next/font/google";
 
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
@@ -8,21 +8,22 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { AppToaster } from "@/components/ui/sonner";
 
-const bodyFont = Be_Vietnam_Pro({
+const bodyFont = Inter({
   variable: "--font-body",
   subsets: ["latin", "latin-ext", "vietnamese"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
-const displayFont = Cormorant_Garamond({
+const displayFont = Sora({
   variable: "--font-display",
-  subsets: ["latin", "latin-ext", "vietnamese"],
-  weight: ["500", "600", "700"],
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
-  title: "ZEPHYR | Luxury Shoe Atelier",
-  description: "Bộ sưu tập giày cao cấp với trải nghiệm mua sắm hiện đại, quản trị rõ ràng và giao diện tiếng Việt.",
+  title: "ZEPHYR | Transparent Glass Storefront",
+  description:
+    "ZEPHYR là storefront giày với transparent glass overlays, editorial lifestyle backdrops và decision zones rõ ràng cho hành vi mua.",
 };
 
 export default function RootLayout({
@@ -36,7 +37,7 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
       className={`${bodyFont.variable} ${displayFont.variable} antialiased`}
     >
-      <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <body className="min-h-screen overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
         <AuthProvider>
           <CartProvider>
             <div className="ambient-shell flex min-h-screen flex-col">

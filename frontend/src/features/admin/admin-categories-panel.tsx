@@ -31,7 +31,7 @@ export function AdminCategoriesPanel({
         }
       />
       <AdminPanelBody>
-        <div className="rounded-[1.6rem] border border-white/8 bg-black/20 p-2">
+        <div className="rounded-[1.6rem] border border-[var(--line)] bg-white/48 p-2">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -46,9 +46,9 @@ export function AdminCategoriesPanel({
               <TableBody>
                 {categories.map((category) => (
                   <TableRow key={category.id}>
-                    <TableCell className="font-medium text-white">{category.name}</TableCell>
+                    <TableCell className="font-medium text-[var(--foreground-hero)]">{category.name}</TableCell>
                     <TableCell>{category.slug}</TableCell>
-                    <TableCell className="max-w-md text-white/62">{category.description}</TableCell>
+                    <TableCell className="max-w-md text-[var(--muted)]">{category.description}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div

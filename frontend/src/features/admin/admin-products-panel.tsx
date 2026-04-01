@@ -28,7 +28,7 @@ export function AdminProductsPanel({ shoes, onCreate, onEdit, onDelete }: AdminP
         }
       />
       <AdminPanelBody className="space-y-4">
-        <div className="rounded-[1.6rem] border border-white/8 bg-black/20 p-2">
+        <div className="rounded-[1.6rem] border border-[var(--line)] bg-white/48 p-2">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -46,8 +46,8 @@ export function AdminProductsPanel({ shoes, onCreate, onEdit, onDelete }: AdminP
                   <TableRow key={shoe.id}>
                     <TableCell>
                       <div className="space-y-1">
-                        <div className="font-medium text-white">{shoe.name}</div>
-                        <div className="text-sm text-white/42">
+                        <div className="font-medium text-[var(--foreground-hero)]">{shoe.name}</div>
+                        <div className="text-sm text-[var(--foreground-dim)]">
                           {shoe.brand} • {shoe.silhouette}
                         </div>
                       </div>

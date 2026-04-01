@@ -15,15 +15,22 @@ public record ShoeDetailResponse(
         BigDecimal price,
         String primaryImage,
         String secondaryImage,
+        List<String> galleryImages,
+        String videoUrl,
         List<String> availableSizes,
         List<SizeStockResponse> sizeStocks,
         List<String> accentColors,
         List<String> highlights,
+        String fitNote,
+        String deliveryNote,
+        String campaignBadge,
         String categorySlug,
         String categoryName,
         boolean featured,
         boolean newArrival,
         boolean bestSeller,
         int totalStock,
-        boolean inStock) {
+        boolean inStock,
+        double averageRating,
+        long reviewCount) {
 }

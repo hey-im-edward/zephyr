@@ -51,13 +51,13 @@ export function AdminOrdersPanel({
           <select
             value={orderStatusFilter}
             onChange={(event) => onOrderStatusFilterChange(event.target.value)}
-            className="flex h-11 w-full rounded-2xl border border-white/12 bg-[#08101d] px-4 py-2 text-sm text-white outline-none focus:border-amber-300/70"
+            className="flex h-11 w-full rounded-2xl border border-[var(--line)] bg-white/72 px-4 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--line-strong)]"
           >
-            <option value="" className="bg-slate-950">
+            <option value="" className="bg-white">
               Tất cả trạng thái
             </option>
             {ORDER_STATUS_OPTIONS.map((status) => (
-              <option key={status.value} value={status.value} className="bg-slate-950">
+              <option key={status.value} value={status.value} className="bg-white">
                 {status.label}
               </option>
             ))}
@@ -67,7 +67,7 @@ export function AdminOrdersPanel({
           </Button>
         </div>
 
-        <div className="rounded-[1.6rem] border border-white/8 bg-black/20 p-2">
+        <div className="rounded-[1.6rem] border border-[var(--line)] bg-white/48 p-2">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -83,10 +83,10 @@ export function AdminOrdersPanel({
               <TableBody>
                 {orders.map((order) => (
                   <TableRow key={order.id}>
-                    <TableCell className="font-medium text-white">{order.orderCode}</TableCell>
+                    <TableCell className="font-medium text-[var(--foreground-hero)]">{order.orderCode}</TableCell>
                     <TableCell>
                       <div>{order.customerName}</div>
-                      <div className="text-sm text-white/45">{order.email}</div>
+                      <div className="text-sm text-[var(--foreground-dim)]">{order.email}</div>
                     </TableCell>
                     <TableCell>{formatDateTime(order.createdAt)}</TableCell>
                     <TableCell>

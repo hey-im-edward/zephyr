@@ -10,6 +10,11 @@ public record OrderResponse(
         String email,
         OrderStatus status,
         PaymentMethod paymentMethod,
+        String shippingMethodName,
+        String promotionCode,
         BigDecimal totalAmount,
+        BigDecimal shippingFee,
+        BigDecimal discountAmount,
+        String deliveryWindow,
         LocalDateTime createdAt) {
 }

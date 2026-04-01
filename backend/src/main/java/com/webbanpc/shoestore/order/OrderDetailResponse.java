@@ -16,6 +16,11 @@ public record OrderDetailResponse(
         OrderStatus status,
         PaymentMethod paymentMethod,
         BigDecimal totalAmount,
+        String shippingMethodName,
+        String promotionCode,
+        BigDecimal shippingFee,
+        BigDecimal discountAmount,
+        String deliveryWindow,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         List<OrderItemResponse> items) {
