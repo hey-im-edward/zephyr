@@ -150,6 +150,7 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
   await expect(page.getByRole('button', { name: /E2E User/ })).toBeVisible();
 
   await page.goto(`/shoes/${selected.shoeSlug}`);
+  await page.getByRole('button', { name: `EU ${selected.sizeLabel}` }).click();
   const buyNowButton = page.getByRole('button', { name: 'Mua ngay' });
   await expect(buyNowButton).toBeEnabled();
   await buyNowButton.click();
