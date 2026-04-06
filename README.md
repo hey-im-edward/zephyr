@@ -37,6 +37,13 @@ npm run dev
 - `access token` được giữ ngắn hạn trong memory và tiếp tục đi qua header `Authorization: Bearer <token>` cho các API cần xác thực.
 - Nếu frontend và backend chạy khác origin, request xác thực phải gửi kèm `credentials: "include"` và backend chỉ được allowlist đúng origin tin cậy.
 
+## Ghi chú release và deploy
+
+- Ba workflow `deploy-preview`, `deploy-staging`, `deploy-production` hiện đều fail-fast khi thiếu biến deploy bắt buộc và đều có smoke check sau deploy.
+- Workflow production chỉ cho phép chạy từ `refs/heads/main` để giảm rủi ro phát hành nhầm nhánh.
+- Smoke check hiện xác minh đồng thời storefront HTML và API `/api/v1/home`. Cách này phù hợp khi storefront và backend được publish cùng một origin.
+- Nếu kiến trúc deploy tách frontend và backend sang domain khác nhau, cần bổ sung biến URL smoke riêng cho backend trước khi coi pipeline production là hoàn chỉnh.
+
 ## Trạng thái xác minh gần nhất
 
 - Frontend: `npm run lint`, `npm run typecheck`, `npm run test:e2e` đều pass.
