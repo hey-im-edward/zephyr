@@ -47,7 +47,6 @@ jobs:
       APP_ADMIN_USERNAME: admin@zephyr.vn
       APP_ADMIN_PASSWORD: TestAdminPassword123!
       APP_JWT_SECRET: ci-staging-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz
-      SPRING_PROFILES_ACTIVE: test
     steps:
       - uses: actions/checkout@v4
 
@@ -71,19 +70,22 @@ jobs:
 
       - name: Build backend
         working-directory: backend
+        env:
+          SPRING_PROFILES_ACTIVE: test
         run: ./mvnw -B verify
 
       - name: Validate deploy inputs
         run: |
-          if [ -z "$STAGING_DEPLOY_URL" ]; then
+          set -euo pipefail
+          if [ -z "${STAGING_DEPLOY_URL:-}" ]; then
             echo "STAGING_DEPLOY_URL is required."
             exit 1
           fi
-          if [ -z "$STAGING_DEPLOY_TOKEN" ]; then
+          if [ -z "${STAGING_DEPLOY_TOKEN:-}" ]; then
             echo "STAGING_DEPLOY_TOKEN is required."
             exit 1
           fi
-          if [ -z "$STAGING_URL" ]; then
+          if [ -z "${STAGING_URL:-}" ]; then
             echo "STAGING_URL is required for post-deploy health checks."
             exit 1
           fi
@@ -98,8 +100,11 @@ jobs:
 
       - name: Verify staging health
         run: |
+          set -euo pipefail
+          BASE_URL="${STAGING_URL%/}"
           for attempt in $(seq 1 20); do
-            if curl -fsS "$STAGING_URL" >/dev/null; then
+            if curl -fsSL "$BASE_URL/" | grep -qi "<html" \
+              && curl -fsSL "$BASE_URL/api/v1/home" | jq -e '.headline and (.featured | length > 0) and (.categories | length > 0)' >/dev/null; then
               echo "Staging health check passed."
               exit 0
             fi

@@ -20,6 +20,21 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
     @EntityGraph(attributePaths = { "items", "user" })
     List<CustomerOrder> findAllByUserIdOrderByCreatedAtDesc(Long userId);
 
+    @EntityGraph(attributePaths = { "shippingMethod", "promotion" })
+    @Query("""
+            select o
+            from CustomerOrder o
+            where (:status is null or o.status = :status)
+              and (
+                :query is null
+                or lower(o.orderCode) like concat('%', lower(:query), '%')
+                or lower(o.customerName) like concat('%', lower(:query), '%')
+                or lower(o.email) like concat('%', lower(:query), '%')
+              )
+            order by o.createdAt desc, o.id desc
+            """)
+    List<CustomerOrder> findAllForAdmin(@Param("status") OrderStatus status, @Param("query") String query);
+
     long countByStatus(OrderStatus status);
 
     @Query("select coalesce(sum(o.totalAmount), 0) from CustomerOrder o where o.status <> com.webbanpc.shoestore.order.OrderStatus.CANCELLED")

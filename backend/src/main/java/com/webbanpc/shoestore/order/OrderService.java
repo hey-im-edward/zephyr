@@ -144,14 +144,13 @@ public class OrderService {
     }
 
     public List<OrderResponse> listForAdmin(OrderStatus status, String query) {
-        String normalizedQuery = query == null ? null : query.trim().toLowerCase();
-        return customerOrderRepository.findAllByOrderByCreatedAtDesc()
+        String normalizedQuery = query == null ? null : query.trim();
+        if (normalizedQuery != null && normalizedQuery.isBlank()) {
+            normalizedQuery = null;
+        }
+
+        return customerOrderRepository.findAllForAdmin(status, normalizedQuery)
                 .stream()
-                .filter(order -> status == null || order.getStatus() == status)
-                .filter(order -> normalizedQuery == null || normalizedQuery.isBlank()
-                        || order.getOrderCode().toLowerCase().contains(normalizedQuery)
-                        || order.getCustomerName().toLowerCase().contains(normalizedQuery)
-                        || order.getEmail().toLowerCase().contains(normalizedQuery))
                 .map(this::toResponse)
                 .toList();
     }
