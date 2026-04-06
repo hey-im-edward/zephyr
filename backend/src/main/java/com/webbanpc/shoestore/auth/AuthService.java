@@ -84,8 +84,8 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse refresh(RefreshRequest request) {
-        RefreshToken token = Objects.requireNonNull(refreshTokenRepository.findByTokenHashForUpdate(hash(request.refreshToken()))
+    public AuthResponse refresh(String rawRefreshToken) {
+        RefreshToken token = Objects.requireNonNull(refreshTokenRepository.findByTokenHashForUpdate(hash(rawRefreshToken))
                 .orElseThrow(() -> new UnauthorizedException("Refresh token is invalid")));
 
         if (token.isRevoked() || token.getExpiresAt().isBefore(LocalDateTime.now())) {
@@ -98,8 +98,8 @@ public class AuthService {
     }
 
     @Transactional
-    public void logout(LogoutRequest request) {
-        refreshTokenRepository.findByTokenHashForUpdate(hash(request.refreshToken()))
+    public void logout(String rawRefreshToken) {
+        refreshTokenRepository.findByTokenHashForUpdate(hash(rawRefreshToken))
                 .ifPresent(token -> {
                     token.setRevoked(true);
                     refreshTokenRepository.save(token);

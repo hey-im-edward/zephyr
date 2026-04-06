@@ -27,7 +27,7 @@ type OrderableSelection = {
   sizeLabel: string;
 };
 
-const API_BASE_URL = process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8080/api/v1';
+const API_BASE_URL = process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api/v1';
 
 function createCredentials(): Credentials {
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
@@ -137,14 +137,17 @@ test('registered user can place an authenticated order', async ({ request }) => 
 test('authenticated browser session can complete checkout flow', async ({ page, request }) => {
   const credentials = createCredentials();
   await registerUser(request, credentials);
-  const auth = await loginByApi(request, credentials);
+  const browserLogin = await page.request.post(`${API_BASE_URL}/auth/login`, {
+    data: {
+      email: credentials.email,
+      password: credentials.password,
+    },
+  });
+  expect(browserLogin.ok()).toBeTruthy();
   const selected = await findFirstOrderableSelection(request);
 
   await page.goto('/');
-  await page.evaluate((session) => {
-    window.localStorage.setItem('zephyr-auth', JSON.stringify(session));
-  }, auth);
-  await page.reload();
+  await expect(page.getByRole('button', { name: /E2E User/ })).toBeVisible();
 
   await page.goto(`/shoes/${selected.shoeSlug}`);
   const buyNowButton = page.getByRole('button', { name: 'Mua ngay' });

@@ -18,10 +18,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import com.webbanpc.shoestore.auth.JwtAuthenticationFilter;
 import com.webbanpc.shoestore.auth.JwtProperties;
+import com.webbanpc.shoestore.auth.RefreshCookieProperties;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties({ AdminProperties.class, JwtProperties.class })
+@EnableConfigurationProperties({ AdminProperties.class, JwtProperties.class, RefreshCookieProperties.class })
 public class SecurityConfig {
 
     @Bean

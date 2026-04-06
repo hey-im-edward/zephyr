@@ -299,8 +299,6 @@ export type AuthUser = {
 export type AuthResponse = {
   accessToken: string;
   accessTokenExpiresAt: string;
-  refreshToken: string;
-  refreshTokenExpiresAt: string;
   user: AuthUser;
 };
 

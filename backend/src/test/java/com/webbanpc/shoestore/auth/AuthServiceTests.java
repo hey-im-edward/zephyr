@@ -86,7 +86,7 @@ class AuthServiceTests {
         when(jwtService.generateAccessToken(user)).thenReturn(
                 new JwtService.TokenPayload("access-token", LocalDateTime.of(2030, 1, 1, 0, 15)));
 
-        AuthResponse response = authService.refresh(new RefreshRequest(rawRefreshToken));
+        AuthResponse response = authService.refresh(rawRefreshToken);
 
         ArgumentCaptor<RefreshToken> tokenCaptor = ArgumentCaptor.forClass(RefreshToken.class);
         verify(refreshTokenRepository, times(2)).save(tokenCaptor.capture());

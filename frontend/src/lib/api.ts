@@ -77,6 +77,7 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 async function request<T>(path: string, { token, revalidate, headers, ...init }: RequestOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(headers ?? {}),
@@ -247,6 +248,7 @@ export async function getShippingMethods(): Promise<ShippingMethod[]> {
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
   return request<AuthResponse>("/auth/login", {
     method: "POST",
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 }
@@ -254,21 +256,22 @@ export async function login(payload: LoginPayload): Promise<AuthResponse> {
 export async function register(payload: RegisterPayload): Promise<AuthResponse> {
   return request<AuthResponse>("/auth/register", {
     method: "POST",
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 }
 
-export async function refreshAuth(refreshToken: string): Promise<AuthResponse> {
+export async function refreshAuth(): Promise<AuthResponse> {
   return request<AuthResponse>("/auth/refresh", {
     method: "POST",
-    body: JSON.stringify({ refreshToken }),
+    credentials: "include",
   });
 }
 
-export async function logout(refreshToken: string): Promise<void> {
+export async function logout(): Promise<void> {
   return request<void>("/auth/logout", {
     method: "POST",
-    body: JSON.stringify({ refreshToken }),
+    credentials: "include",
   });
 }
 

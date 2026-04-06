@@ -1,29 +1,29 @@
 # ZEPHYR Monorepo
 
-Modern shoe-store workspace built around the ZEPHYR storefront and operations stack.
+Workspace cho storefront và hệ vận hành của ZEPHYR.
 
-## Structure
+## Cấu trúc chính
 
-- `backend/`: Spring Boot 3.5.12 API, Java 21, MySQL, Flyway
-- `frontend/`: Next.js 16.2.1 storefront, React 19.2.4, TypeScript, Tailwind CSS 4
-- `docker-compose.yml`: optional local MySQL service for development
+- `backend/`: API Spring Boot 3.5.12, Java 21, MySQL, Flyway.
+- `frontend/`: storefront Next.js 16.2.1, React 19.2.4, TypeScript, Tailwind CSS 4.
+- `docker-compose.yml`: dịch vụ MySQL cục bộ phục vụ phát triển và kiểm thử.
 
-## Local workflow
+## Quy trình chạy cục bộ
 
-1. Start MySQL with Docker if you do not already have a local MySQL server:
+1. Khởi động MySQL nếu máy chưa có instance cục bộ:
 
 ```bash
 docker compose up -d mysql
 ```
 
-1. Start backend:
+2. Chạy backend:
 
 ```bash
 cd backend
 ./mvnw spring-boot:run
 ```
 
-1. Start frontend:
+3. Chạy frontend:
 
 ```bash
 cd frontend
@@ -31,7 +31,13 @@ npm install
 npm run dev
 ```
 
-## Current status
+## Ghi chú xác thực
 
-- Frontend lint and production build were verified successfully.
-- Backend build and test were verified on Java 21 against local MySQL Docker.
+- `refresh token` được backend phát qua `HttpOnly cookie`; frontend không còn lưu token xác thực trong `localStorage`.
+- `access token` được giữ ngắn hạn trong memory và tiếp tục đi qua header `Authorization: Bearer <token>` cho các API cần xác thực.
+- Nếu frontend và backend chạy khác origin, request xác thực phải gửi kèm `credentials: "include"` và backend chỉ được allowlist đúng origin tin cậy.
+
+## Trạng thái xác minh gần nhất
+
+- Frontend: `npm run lint`, `npm run typecheck`, `npm run test:e2e` đều pass.
+- Backend: `.\mvnw.cmd test` pass trên Java 21 và MySQL cục bộ.

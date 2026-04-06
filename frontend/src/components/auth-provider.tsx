@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 import {
   changePassword,
@@ -35,7 +35,6 @@ type AuthContextValue = {
   changePasswordAction: (payload: ChangePasswordPayload) => Promise<void>;
 };
 
-const STORAGE_KEY = "zephyr-auth";
 const REFRESH_BUFFER_MS = 15_000;
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -43,62 +42,56 @@ function isExpired(isoDate: string) {
   return new Date(isoDate).getTime() <= Date.now() + REFRESH_BUFFER_MS;
 }
 
-function readStoredSession(): AuthResponse | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as AuthResponse;
-  } catch {
-    window.localStorage.removeItem(STORAGE_KEY);
-    return null;
-  }
-}
-
-function persistSession(session: AuthResponse | null) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (!session) {
-    window.localStorage.removeItem(STORAGE_KEY);
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthResponse | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const refreshPromiseRef = useRef<Promise<AuthResponse | null> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    queueMicrotask(() => {
-      if (cancelled) return;
-      setSession(readStoredSession());
-      setIsReady(true);
-    });
+    void (async () => {
+      try {
+        const nextSession = await refreshAuth();
+        if (!cancelled) {
+          setSession(nextSession);
+        }
+      } catch {
+        if (!cancelled) {
+          setSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsReady(true);
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (!isReady) return;
-    persistSession(session);
-  }, [isReady, session]);
+  async function refreshSession() {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
 
-  async function refreshSession(current: AuthResponse) {
-    const nextSession = await refreshAuth(current.refreshToken);
-    setSession(nextSession);
-    return nextSession;
+    const refreshPromise = refreshAuth()
+      .then((nextSession) => {
+        setSession(nextSession);
+        return nextSession;
+      })
+      .catch(() => {
+        setSession(null);
+        return null;
+      })
+      .finally(() => {
+        refreshPromiseRef.current = null;
+      });
+
+    refreshPromiseRef.current = refreshPromise;
+    return refreshPromise;
   }
 
   async function ensureAccessToken(currentSession: AuthResponse | null) {
@@ -107,13 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return currentSession.accessToken;
     }
 
-    try {
-      const nextSession = await refreshSession(currentSession);
-      return nextSession.accessToken;
-    } catch {
-      setSession(null);
-      return null;
-    }
+    const nextSession = await refreshSession();
+    return nextSession?.accessToken ?? null;
   }
 
   async function requireAccessToken() {
@@ -142,12 +130,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return nextSession;
     },
     logoutAction: async () => {
-      if (session?.refreshToken) {
-        try {
-          await logout(session.refreshToken);
-        } catch {
-          // Always clear client state even if refresh token is already invalid.
-        }
+      try {
+        await logout();
+      } catch {
+        // Always clear client state even if refresh token is already invalid.
       }
 
       setSession(null);
@@ -169,6 +155,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     changePasswordAction: async (payload) => {
       const token = await requireAccessToken();
       await changePassword(token, payload);
+      try {
+        await logout();
+      } catch {
+        // Mật khẩu đã đổi xong; vẫn cần dọn session client.
+      }
       setSession(null);
     },
   };

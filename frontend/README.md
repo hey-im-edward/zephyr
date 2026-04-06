@@ -1,6 +1,6 @@
 # ZEPHYR Frontend
 
-Next.js 16 storefront for the ZEPHYR experience.
+Storefront Next.js 16 cho trải nghiệm ZEPHYR.
 
 ## Stack
 
@@ -9,13 +9,15 @@ Next.js 16 storefront for the ZEPHYR experience.
 - TypeScript 5
 - Tailwind CSS 4
 
-## Run
+## Chạy cục bộ
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Notes
+## Ghi chú cấu hình
 
-- Set `NEXT_PUBLIC_API_BASE_URL` if the API is not running on `http://localhost:8080/api/v1`.
+- Đặt `NEXT_PUBLIC_API_BASE_URL` nếu API không chạy ở `http://localhost:8080/api/v1`.
+- Luồng đăng nhập mới dựa trên `HttpOnly refresh cookie`, nên các request auth từ frontend phải gửi `credentials: "include"`.
+- Frontend chỉ giữ `access token` trong memory cho phiên tab hiện tại; khi tải lại trang, `AuthProvider` sẽ tự bootstrap lại session qua `POST /auth/refresh`.
