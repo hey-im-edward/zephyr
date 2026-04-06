@@ -120,30 +120,55 @@ export default function AccountPage() {
     const token = await getAccessToken();
     if (!token) return;
 
-    const [currentUser, orderList, addressList, wishlistItems] = await Promise.all([
+    const [currentUserResult, orderListResult, addressListResult, wishlistResult] = await Promise.allSettled([
       reloadUser(),
       listMyOrders(token),
       getMyAddresses(token),
       getWishlist(token),
     ]);
 
-    if (currentUser) {
+    const resolvedUser = currentUserResult.status === "fulfilled" ? currentUserResult.value : user;
+    if (resolvedUser) {
       profileForm.reset({
-        fullName: currentUser.fullName,
-        phone: currentUser.phone,
+        fullName: resolvedUser.fullName,
+        phone: resolvedUser.phone,
       });
 
       addressForm.reset((current) => ({
         ...current,
-        recipientName: currentUser.fullName,
-        phone: currentUser.phone,
+        recipientName: resolvedUser.fullName,
+        phone: resolvedUser.phone,
       }));
     }
 
-    setOrders(orderList);
-    setAddresses(addressList);
-    setWishlist(wishlistItems);
-  }, [addressForm, getAccessToken, profileForm, reloadUser]);
+    const failedSections: string[] = [];
+
+    if (orderListResult.status === "fulfilled") {
+      setOrders(orderListResult.value);
+    } else {
+      failedSections.push("đơn hàng");
+    }
+
+    if (addressListResult.status === "fulfilled") {
+      setAddresses(addressListResult.value);
+    } else {
+      failedSections.push("địa chỉ");
+    }
+
+    if (wishlistResult.status === "fulfilled") {
+      setWishlist(wishlistResult.value);
+    } else {
+      failedSections.push("wishlist");
+    }
+
+    if (currentUserResult.status === "rejected" && !resolvedUser) {
+      failedSections.push("hồ sơ");
+    }
+
+    if (failedSections.length > 0) {
+      toast.error(`Một số phần dữ liệu tài khoản chưa tải được: ${failedSections.join(", ")}.`);
+    }
+  }, [addressForm, getAccessToken, profileForm, reloadUser, user]);
 
   useEffect(() => {
     if (!isReady || !isAuthenticated || user?.role === "ADMIN") return;

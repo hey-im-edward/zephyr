@@ -36,6 +36,12 @@ npm run dev
 - `refresh token` được backend phát qua `HttpOnly cookie`; frontend không còn lưu token xác thực trong `localStorage`.
 - `access token` được giữ ngắn hạn trong memory và tiếp tục đi qua header `Authorization: Bearer <token>` cho các API cần xác thực.
 - Nếu frontend và backend chạy khác origin, request xác thực phải gửi kèm `credentials: "include"` và backend chỉ được allowlist đúng origin tin cậy.
+- Frontend đồng bộ trạng thái đăng nhập giữa các tab bằng cơ chế sync event, nên thao tác đăng nhập, đăng xuất, đổi mật khẩu và cập nhật hồ sơ sẽ phản ánh nhất quán hơn trên cùng trình duyệt.
+
+## Ghi chú giỏ hàng
+
+- Giỏ hàng khách vãng lai được lưu riêng với giỏ hàng của từng tài khoản đã đăng nhập; không còn dùng chung một `localStorage key` cho mọi phiên.
+- Khi khách đăng nhập, giỏ hàng guest hiện tại sẽ được hợp nhất vào giỏ hàng của chính tài khoản đó thay vì ghi đè hoặc rò rỉ sang người dùng khác.
 
 ## Ghi chú release và deploy
 

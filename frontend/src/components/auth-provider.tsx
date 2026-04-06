@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import {
   changePassword,
@@ -36,16 +36,66 @@ type AuthContextValue = {
 };
 
 const REFRESH_BUFFER_MS = 15_000;
+const AUTH_SYNC_CHANNEL = "zephyr-auth";
+const AUTH_SYNC_STORAGE_KEY = "zephyr-auth-sync";
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+type AuthSyncAction = "session-updated" | "session-cleared";
+
+type AuthSyncMessage = {
+  action: AuthSyncAction;
+  source: string;
+  at: number;
+};
 
 function isExpired(isoDate: string) {
   return new Date(isoDate).getTime() <= Date.now() + REFRESH_BUFFER_MS;
+}
+
+function parseAuthSyncMessage(value: unknown): AuthSyncMessage | null {
+  if (!value) return null;
+
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      (parsed.action === "session-updated" || parsed.action === "session-cleared") &&
+      typeof parsed.source === "string"
+    ) {
+      return {
+        action: parsed.action,
+        source: parsed.source,
+        at: typeof parsed.at === "number" ? parsed.at : Date.now(),
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function publishAuthSync(message: AuthSyncMessage) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const raw = JSON.stringify(message);
+  window.localStorage.setItem(AUTH_SYNC_STORAGE_KEY, raw);
+
+  if ("BroadcastChannel" in window) {
+    const channel = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+    channel.postMessage(message);
+    channel.close();
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthResponse | null>(null);
   const [isReady, setIsReady] = useState(false);
   const refreshPromiseRef = useRef<Promise<AuthResponse | null> | null>(null);
+  const syncSourceRef = useRef(`auth-tab-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  async function refreshSession() {
+  const refreshSession = useCallback(async () => {
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current;
     }
@@ -92,7 +142,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     refreshPromiseRef.current = refreshPromise;
     return refreshPromise;
-  }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const syncFromExternalChange = async (action: AuthSyncAction) => {
+      if (action === "session-cleared") {
+        setSession(null);
+        return;
+      }
+
+      await refreshSession();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== AUTH_SYNC_STORAGE_KEY || !event.newValue) {
+        return;
+      }
+
+      const message = parseAuthSyncMessage(event.newValue);
+      if (!message || message.source === syncSourceRef.current) {
+        return;
+      }
+
+      void syncFromExternalChange(message.action);
+    };
+
+    const channel = "BroadcastChannel" in window ? new BroadcastChannel(AUTH_SYNC_CHANNEL) : null;
+    const handleChannelMessage = (event: MessageEvent<AuthSyncMessage>) => {
+      const message = parseAuthSyncMessage(event.data);
+      if (!message || message.source === syncSourceRef.current) {
+        return;
+      }
+
+      void syncFromExternalChange(message.action);
+    };
+
+    window.addEventListener("storage", handleStorage);
+    channel?.addEventListener("message", handleChannelMessage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      channel?.removeEventListener("message", handleChannelMessage);
+      channel?.close();
+    };
+  }, [refreshSession]);
 
   async function ensureAccessToken(currentSession: AuthResponse | null) {
     if (!currentSession) return null;
@@ -122,11 +219,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginAction: async (payload) => {
       const nextSession = await login(payload);
       setSession(nextSession);
+      publishAuthSync({
+        action: "session-updated",
+        source: syncSourceRef.current,
+        at: Date.now(),
+      });
       return nextSession;
     },
     registerAction: async (payload) => {
       const nextSession = await register(payload);
       setSession(nextSession);
+      publishAuthSync({
+        action: "session-updated",
+        source: syncSourceRef.current,
+        at: Date.now(),
+      });
       return nextSession;
     },
     logoutAction: async () => {
@@ -137,6 +244,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSession(null);
+      publishAuthSync({
+        action: "session-cleared",
+        source: syncSourceRef.current,
+        at: Date.now(),
+      });
     },
     reloadUser: async () => {
       const token = await ensureAccessToken(session);
@@ -150,6 +262,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = await requireAccessToken();
       const user = await updateProfile(token, payload);
       setSession((existing) => (existing ? { ...existing, user } : existing));
+      publishAuthSync({
+        action: "session-updated",
+        source: syncSourceRef.current,
+        at: Date.now(),
+      });
       return user;
     },
     changePasswordAction: async (payload) => {
@@ -161,6 +278,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Mật khẩu đã đổi xong; vẫn cần dọn session client.
       }
       setSession(null);
+      publishAuthSync({
+        action: "session-cleared",
+        source: syncSourceRef.current,
+        at: Date.now(),
+      });
     },
   };
 

@@ -162,9 +162,5 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
   await expect(submitOrderButton).toBeEnabled();
   await submitOrderButton.click();
 
-  await page.waitForFunction(() => {
-    const raw = window.localStorage.getItem('zephyr-cart');
-    return raw === null || raw === '[]';
-  });
   await expect(page.getByText('Giỏ hàng đang trống')).toBeVisible({ timeout: 15_000 });
 });

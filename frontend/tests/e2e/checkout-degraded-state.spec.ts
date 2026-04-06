@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const GUEST_CART_STORAGE_KEY = "zephyr-cart:guest";
+
 const cartSeed = [
   {
     shoeSlug: "demo-shoe",
@@ -15,9 +17,12 @@ const cartSeed = [
 
 test("checkout blocks submit when shipping and promotion contracts are unavailable", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate((items) => {
-    window.localStorage.setItem("zephyr-cart", JSON.stringify(items));
-  }, cartSeed);
+  await page.evaluate(
+    ({ items, storageKey }) => {
+      window.localStorage.setItem(storageKey, JSON.stringify(items));
+    },
+    { items: cartSeed, storageKey: GUEST_CART_STORAGE_KEY },
+  );
 
   await page.route("**/api/v1/shipping-methods", async (route) => {
     await route.fulfill({
