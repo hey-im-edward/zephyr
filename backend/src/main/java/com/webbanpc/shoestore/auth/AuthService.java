@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -69,8 +70,12 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email().trim().toLowerCase(), request.password()));
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.email().trim().toLowerCase(), request.password()));
+        } catch (AuthenticationException exception) {
+            throw new UnauthorizedException("Invalid credentials");
+        }
 
         UserAccount user = Objects.requireNonNull(userRepository.findByEmail(request.email().trim().toLowerCase())
                 .orElseThrow(() -> new UnauthorizedException("Invalid credentials")));
@@ -80,7 +85,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refresh(RefreshRequest request) {
-        RefreshToken token = Objects.requireNonNull(refreshTokenRepository.findByTokenHash(hash(request.refreshToken()))
+        RefreshToken token = Objects.requireNonNull(refreshTokenRepository.findByTokenHashForUpdate(hash(request.refreshToken()))
                 .orElseThrow(() -> new UnauthorizedException("Refresh token is invalid")));
 
         if (token.isRevoked() || token.getExpiresAt().isBefore(LocalDateTime.now())) {
@@ -88,13 +93,17 @@ public class AuthService {
         }
 
         token.setRevoked(true);
+        refreshTokenRepository.save(token);
         return issueTokens(token.getUser());
     }
 
     @Transactional
     public void logout(LogoutRequest request) {
-        refreshTokenRepository.findByTokenHash(hash(request.refreshToken()))
-                .ifPresent(token -> token.setRevoked(true));
+        refreshTokenRepository.findByTokenHashForUpdate(hash(request.refreshToken()))
+                .ifPresent(token -> {
+                    token.setRevoked(true);
+                    refreshTokenRepository.save(token);
+                });
     }
 
     public CurrentUserResponse currentUser(UserAccount user) {
@@ -115,6 +124,7 @@ public class AuthService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        refreshTokenRepository.revokeAllByUserId(user.getId());
     }
 
     private AuthResponse issueTokens(UserAccount user) {

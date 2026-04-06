@@ -18,7 +18,7 @@ const ratings = [1, 2, 3, 4, 5];
 
 export function ReviewComposer({ shoeSlug }: ReviewComposerProps) {
   const router = useRouter();
-  const { isAuthenticated, getAccessToken } = useAuth();
+  const { isAuthenticated, isAdmin, getAccessToken } = useAuth();
   const [rating, setRating] = useState(5);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -29,6 +29,11 @@ export function ReviewComposer({ shoeSlug }: ReviewComposerProps) {
 
     if (!isAuthenticated) {
       router.push(`/dang-nhap?redirect=/shoes/${shoeSlug}`);
+      return;
+    }
+
+    if (isAdmin) {
+      toast.error("Tài khoản quản trị không thể gửi đánh giá hiển thị cho khách hàng.");
       return;
     }
 
@@ -47,7 +52,7 @@ export function ReviewComposer({ shoeSlug }: ReviewComposerProps) {
             body,
           });
 
-          toast.success("Đã gửi review. Nội dung sẽ xuất hiện sau khi được duyệt.");
+          toast.success("Đã gửi đánh giá. Nội dung sẽ chờ duyệt trước khi hiển thị.");
           setTitle("");
           setBody("");
           setRating(5);
@@ -92,10 +97,10 @@ export function ReviewComposer({ shoeSlug }: ReviewComposerProps) {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--muted)]">
-          Review mới sẽ đi qua moderation trước khi xuất hiện công khai.
+          Chỉ người mua đã nhận hàng mới có thể gửi đánh giá và mọi nội dung mới đều phải qua duyệt.
         </p>
-        <Button type="submit" disabled={isPending || !title.trim() || !body.trim()}>
-          {isPending ? "Đang gửi..." : "Gửi review"}
+        <Button type="submit" disabled={isPending || isAdmin || !title.trim() || !body.trim()}>
+          {isPending ? "Đang gửi..." : "Gửi đánh giá"}
         </Button>
       </div>
     </form>

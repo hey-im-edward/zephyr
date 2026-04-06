@@ -30,22 +30,16 @@ public class AdminAccountInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        userRepository.findByEmail(adminProperties.username())
-                .ifPresentOrElse(this::refreshAdminAccount, this::createAdminAccount);
+        String normalizedUsername = adminProperties.username().trim().toLowerCase();
+        if (userRepository.findByEmail(normalizedUsername).isEmpty()) {
+            createAdminAccount(normalizedUsername);
+        }
     }
 
-    private void refreshAdminAccount(@org.springframework.lang.NonNull UserAccount adminAccount) {
-        adminAccount.setFullName("ZEPHYR Admin");
-        adminAccount.setPhone("0900000000");
-        adminAccount.setRole(UserRole.ADMIN);
-        adminAccount.setActive(true);
-        adminAccount.setPasswordHash(passwordEncoder.encode(adminProperties.password()));
-    }
-
-    private void createAdminAccount() {
+    private void createAdminAccount(String email) {
         UserAccount adminAccount = UserAccount.builder()
                 .fullName("ZEPHYR Admin")
-                .email(adminProperties.username())
+                .email(email)
                 .phone("0900000000")
                 .passwordHash(passwordEncoder.encode(adminProperties.password()))
                 .role(UserRole.ADMIN)

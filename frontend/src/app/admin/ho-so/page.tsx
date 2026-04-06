@@ -101,7 +101,7 @@ export default function AdminProfilePage() {
     })
       .then(() => {
         passwordForm.reset();
-        toast.success("Đã cập nhật bảo mật quản trị.");
+        toast.success("Đã cập nhật bảo mật quản trị. Vui lòng đăng nhập lại.");
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Không thể cập nhật mật khẩu quản trị.");

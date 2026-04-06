@@ -5,6 +5,7 @@ Thumbs.db
 .vscode/
 .playwright-cli/
 output/
+.codex/
 
 # Node / Next.js
 frontend/node_modules/

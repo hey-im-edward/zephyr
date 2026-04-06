@@ -3,6 +3,7 @@ package com.webbanpc.shoestore.wishlist;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,6 +11,7 @@ import com.webbanpc.shoestore.common.ResourceNotFoundException;
 import com.webbanpc.shoestore.shoe.Shoe;
 import com.webbanpc.shoestore.shoe.ShoeRepository;
 import com.webbanpc.shoestore.user.UserAccount;
+import com.webbanpc.shoestore.user.UserRole;
 
 @Service
 @Transactional(readOnly = true)
@@ -24,6 +26,7 @@ public class WishlistService {
     }
 
     public List<WishlistResponse> listForUser(UserAccount user) {
+        ensureWishlistAllowed(user);
         return wishlistItemRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId())
                 .stream()
                 .map(this::toResponse)
@@ -31,11 +34,13 @@ public class WishlistService {
     }
 
     public boolean isWishlisted(UserAccount user, String slug) {
+        ensureWishlistAllowed(user);
         return wishlistItemRepository.existsByUserIdAndShoeSlug(user.getId(), slug);
     }
 
     @Transactional
     public WishlistResponse add(UserAccount user, WishlistRequest request) {
+        ensureWishlistAllowed(user);
         return wishlistItemRepository.findByUserIdAndShoeSlug(user.getId(), request.shoeSlug())
                 .map(this::toResponse)
                 .orElseGet(() -> {
@@ -52,9 +57,16 @@ public class WishlistService {
 
     @Transactional
     public void remove(UserAccount user, String slug) {
+        ensureWishlistAllowed(user);
         WishlistItem item = wishlistItemRepository.findByUserIdAndShoeSlug(user.getId(), slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Wishlist item not found for shoe: " + slug));
         wishlistItemRepository.delete(item);
+    }
+
+    private void ensureWishlistAllowed(UserAccount user) {
+        if (user != null && user.getRole() == UserRole.ADMIN) {
+            throw new AccessDeniedException("Admin accounts are not allowed to manage wishlist");
+        }
     }
 
     private WishlistResponse toResponse(WishlistItem item) {

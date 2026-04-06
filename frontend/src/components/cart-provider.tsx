@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useSyncExternalStore } from "react";
 
+import { useAuth } from "@/components/auth-provider";
 import type { CartItem } from "@/lib/types";
 
 type CartContextValue = {
@@ -88,16 +89,20 @@ function updateCart(updater: (current: CartItem[]) => CartItem[]) {
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { isAdmin, isReady } = useAuth();
   const items = useSyncExternalStore(subscribe, readCart, () => EMPTY_CART);
+  const isAdminSession = isReady && isAdmin;
+  const visibleItems = isAdminSession ? EMPTY_CART : items;
 
-  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-  const subtotal = items.reduce((total, item) => total + item.quantity * item.price, 0);
+  const itemCount = visibleItems.reduce((total, item) => total + item.quantity, 0);
+  const subtotal = visibleItems.reduce((total, item) => total + item.quantity * item.price, 0);
 
   const value: CartContextValue = {
-    items,
+    items: visibleItems,
     itemCount,
     subtotal,
     addItem: (item, quantity = 1) => {
+      if (isAdminSession) return;
       updateCart((current) => {
         const existing = current.find(
           (entry) => entry.shoeSlug === item.shoeSlug && entry.sizeLabel === item.sizeLabel,
@@ -115,11 +120,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       });
     },
     removeItem: (shoeSlug, sizeLabel) => {
+      if (isAdminSession) return;
       updateCart((current) =>
         current.filter((item) => !(item.shoeSlug === shoeSlug && item.sizeLabel === sizeLabel)),
       );
     },
     updateQuantity: (shoeSlug, sizeLabel, quantity) => {
+      if (isAdminSession) return;
       updateCart((current) =>
         current
           .map((item) =>

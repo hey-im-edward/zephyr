@@ -10,6 +10,7 @@ import {
 } from "@/components/icons";
 
 import { BrandMark } from "@/components/brand-mark";
+import { EmptyState } from "@/components/empty-state";
 import { MotionReveal } from "@/components/motion-reveal";
 import { ShoeCard } from "@/components/shoe-card";
 import { StorefrontSectionHeading } from "@/components/storefront-section-heading";
@@ -17,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getHomeData } from "@/lib/api";
 import { formatVnd } from "@/lib/currency";
-import { fallbackHomeData } from "@/lib/storefront-fallback";
+import { fallbackHomeData, resolveStorefrontData } from "@/lib/storefront-fallback";
 
 const trustPoints = [
   {
@@ -43,7 +44,27 @@ const fallbackHeroFocal =
   "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80";
 
 export default async function Home() {
-  const home = await getHomeData().catch(() => fallbackHomeData);
+  const homeResult = await resolveStorefrontData(() => getHomeData(), fallbackHomeData);
+
+  if (!homeResult.data) {
+    return (
+      <div className="grid-shell">
+        <section className="section-shell py-24">
+          <div className="page-frame">
+            <EmptyState
+              title="Storefront tạm gián đoạn"
+              description="Không thể tải hero, collection và sản phẩm từ hệ thống lúc này. Trang chủ đang được giữ ở chế độ an toàn để tránh hiển thị dữ liệu demo như dữ liệu thật."
+              actionHref="/"
+              actionLabel="Thử tải lại trang chủ"
+            />
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const home = homeResult.data;
+  const isDemoFallback = homeResult.mode === "demo-fallback";
   const heroCampaign = home.heroCampaign;
   const categories = home.categories ?? [];
   const featured = home.featured ?? [];
@@ -71,7 +92,22 @@ export default async function Home() {
 
   return (
     <div className="grid-shell">
-      <section className="section-shell pb-16 pt-10">
+      {isDemoFallback ? (
+        <section className="section-shell pt-10">
+          <div className="page-frame">
+            <div className="surface-panel rounded-[2rem] border border-amber-300/50 bg-amber-50/80 px-5 py-4 text-sm leading-7 text-amber-950">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant="warning">Demo fallback</Badge>
+                <span>
+                  Backend storefront chưa phản hồi. Trang này đang hiển thị dữ liệu demo để giữ nhịp review giao diện, không dùng để xác nhận giá và khuyến mãi thật.
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <section className={`section-shell pb-16 ${isDemoFallback ? "pt-6" : "pt-10"}`}>
         <div className="page-frame">
           <MotionReveal className="surface-strong relative overflow-hidden rounded-[3rem] p-4 md:p-6">
             <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
@@ -136,6 +172,7 @@ export default async function Home() {
                     alt={heroCampaign?.title ?? heroShoe.name}
                     fill
                     priority
+                    sizes="(max-width: 1280px) 100vw, 55vw"
                     className="object-cover"
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(8,17,29,0.12),transparent_34%,rgba(255,255,255,0.26)_74%,rgba(255,255,255,0.34))]" />
@@ -261,7 +298,7 @@ export default async function Home() {
                       </Link>
                     </Button>
                     <div className="relative h-16 w-16 overflow-hidden rounded-[1rem] border border-white/76">
-                      <Image src={banner.imageUrl} alt={banner.title} fill className="object-cover" />
+                      <Image src={banner.imageUrl} alt={banner.title} fill sizes="64px" className="object-cover" />
                     </div>
                   </div>
                 </div>
@@ -284,7 +321,13 @@ export default async function Home() {
               <MotionReveal key={collection.id} className="surface-strong overflow-hidden rounded-[2.7rem] p-4">
                 <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
                   <div className="relative min-h-[26rem] overflow-hidden rounded-[2.1rem]">
-                    <Image src={collection.coverImage} alt={collection.name} fill className="object-cover" />
+                    <Image
+                      src={collection.coverImage}
+                      alt={collection.name}
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 48vw"
+                      className="object-cover"
+                    />
                     <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent_30%,rgba(8,17,29,0.28))]" />
                   </div>
                   <div className="flex flex-col justify-between gap-5 rounded-[2.1rem] bg-white/24 p-6">
@@ -326,7 +369,13 @@ export default async function Home() {
                 <MotionReveal key={collection.id} delay={0.06 * index} className="surface-panel overflow-hidden rounded-[2.2rem] p-4">
                   <div className="grid gap-4 md:grid-cols-[0.78fr_1.22fr]">
                     <div className="relative min-h-[13rem] overflow-hidden rounded-[1.6rem]">
-                      <Image src={collection.coverImage} alt={collection.name} fill className="object-cover" />
+                      <Image
+                        src={collection.coverImage}
+                        alt={collection.name}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 30vw"
+                        className="object-cover"
+                      />
                     </div>
                     <div className="space-y-3 self-center">
                       <Badge>{collection.featureLabel}</Badge>

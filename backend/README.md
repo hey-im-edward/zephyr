@@ -26,4 +26,5 @@ Copy values from `.env.example` into your shell or local environment:
 - `SPRING_DATASOURCE_PASSWORD`
 - `APP_ADMIN_USERNAME`
 - `APP_ADMIN_PASSWORD`
+- `APP_JWT_SECRET`
 - `APP_CORS_ALLOWED_ORIGINS`

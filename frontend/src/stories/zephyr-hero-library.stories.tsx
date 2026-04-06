@@ -54,7 +54,14 @@ export const HomeCampaignHero: Story = {
         <section className="surface-panel overflow-hidden rounded-[2.8rem] p-4">
           <div className="grid gap-4 md:grid-cols-[0.96fr_1.04fr]">
             <div className="relative overflow-hidden rounded-[2rem]">
-              <Image src={focalImage} alt="ZEPHYR hero shoe" width={1200} height={1400} className="h-[26rem] w-full object-cover" />
+              <Image
+                src={focalImage}
+                alt="ZEPHYR hero shoe"
+                width={1200}
+                height={1400}
+                unoptimized
+                className="h-[26rem] w-full object-cover"
+              />
             </div>
             <div className="rounded-[2rem] border border-[var(--line)] bg-white/56 p-6">
               <StorefrontSectionHeading

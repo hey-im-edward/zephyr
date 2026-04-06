@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getCatalog } from "@/lib/api";
 import { formatVnd } from "@/lib/currency";
-import { getFallbackCatalog } from "@/lib/storefront-fallback";
+import { getFallbackCatalog, resolveStorefrontData } from "@/lib/storefront-fallback";
 
 type CatalogPageProps = {
   searchParams: Promise<{
@@ -27,10 +27,23 @@ type CatalogPageProps = {
 
 const sortOptions = [
   { value: "featured", label: "Ưu tiên nổi bật" },
-  { value: "priceAsc", label: "Giá tăng dần" },
-  { value: "priceDesc", label: "Giá giảm dần" },
+  { value: "price-asc", label: "Giá tăng dần" },
+  { value: "price-desc", label: "Giá giảm dần" },
+  { value: "name-asc", label: "Tên A-Z" },
   { value: "newest", label: "Mới nhất" },
-];
+] as const;
+
+type SortValue = (typeof sortOptions)[number]["value"];
+
+const sortValueSet = new Set<SortValue>(sortOptions.map((option) => option.value));
+
+function normalizeSort(sort?: string): SortValue {
+  if (!sort) {
+    return "featured";
+  }
+
+  return sortValueSet.has(sort as SortValue) ? (sort as SortValue) : "featured";
+}
 
 const fallbackCatalogBackground =
   "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1700&q=80";
@@ -48,9 +61,32 @@ function withPage(
   return query.toString();
 }
 
+function withPatchedParams(
+  params: Awaited<CatalogPageProps["searchParams"]>,
+  patch: Partial<Awaited<CatalogPageProps["searchParams"]>>,
+) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (!value) continue;
+    query.set(key, value);
+  }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (!value) {
+      query.delete(key);
+      continue;
+    }
+    query.set(key, value);
+  }
+
+  query.delete("page");
+  return query.toString();
+}
+
 export default async function CatalogPage({ searchParams }: CatalogPageProps) {
   const params = await searchParams;
   const page = Number(params.page ?? "1");
+  const normalizedSort = normalizeSort(params.sort);
   const catalogQuery = {
     category: params.category,
     brand: params.brand,
@@ -59,11 +95,29 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
     query: params.query,
     minPrice: params.minPrice ? Number(params.minPrice) : undefined,
     maxPrice: params.maxPrice ? Number(params.maxPrice) : undefined,
-    sort: params.sort ?? "featured",
+    sort: normalizedSort,
     page: Number.isNaN(page) ? 1 : page,
     pageSize: 9,
   };
-  const catalog = await getCatalog(catalogQuery).catch(() => getFallbackCatalog(catalogQuery));
+  const catalogResult = await resolveStorefrontData(() => getCatalog(catalogQuery), getFallbackCatalog(catalogQuery));
+
+  if (!catalogResult.data) {
+    return (
+      <div className="page-shell py-10">
+        <div className="page-frame">
+          <EmptyState
+            title="Catalog tạm gián đoạn"
+            description="Không thể tải rail lọc và grid sản phẩm từ hệ thống lúc này. Catalog đang được giữ ở chế độ an toàn để tránh hiển thị dữ liệu demo như dữ liệu thật."
+            actionHref="/catalog"
+            actionLabel="Thử tải lại catalog"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const catalog = catalogResult.data;
+  const isDemoFallback = catalogResult.mode === "demo-fallback";
 
   const activeFilters = [
     params.category,
@@ -76,6 +130,17 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
   return (
     <div className="page-shell py-10">
       <div className="page-frame space-y-8">
+        {isDemoFallback ? (
+          <div className="surface-panel rounded-[2rem] border border-amber-300/50 bg-amber-50/80 px-5 py-4 text-sm leading-7 text-amber-950">
+            <div className="flex flex-wrap items-center gap-3">
+                  <Badge variant="warning">Chế độ demo</Badge>
+              <span>
+                Catalog đang hiển thị dữ liệu demo vì backend storefront chưa phản hồi. Bộ lọc và giá bên dưới chỉ dùng cho review giao diện, không dùng để ra quyết định vận hành.
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         <section>
           <MotionReveal className="surface-strong relative overflow-hidden rounded-[2.8rem] p-5 md:p-7">
             <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
@@ -107,7 +172,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
 
                   <select
                     name="sort"
-                    defaultValue={params.sort ?? "featured"}
+                    defaultValue={normalizedSort}
                     className="h-12 rounded-full border border-white/82 bg-white/34 px-4 text-sm text-[var(--foreground)] outline-none focus:border-white"
                   >
                     {sortOptions.map((option) => (
@@ -134,6 +199,8 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                     }
                     alt={catalog.heroCampaign?.title ?? "ZEPHYR catalog"}
                     fill
+                    priority
+                      sizes="(max-width: 1280px) 100vw, 48vw"
                     className="object-cover"
                   />
                   <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(8,17,29,0.08),transparent_38%,rgba(255,255,255,0.28)_78%)]" />
@@ -152,7 +219,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="surface-panel rounded-[1.9rem] p-5">
-                      <div className="utility-label">Brands</div>
+                      <div className="utility-label">Thương hiệu</div>
                     <div className="mt-2 font-display text-[1.8rem] font-semibold tracking-[-0.04em] text-[var(--foreground-hero)]">
                         {catalog.facets.brands.length}
                       </div>
@@ -161,7 +228,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                     </p>
                   </div>
                     <div className="surface-panel rounded-[1.9rem] p-5">
-                      <div className="utility-label">Range</div>
+                      <div className="utility-label">Khoảng giá</div>
                     <div className="mt-2 font-display text-[1.8rem] font-semibold tracking-[-0.04em] text-[var(--foreground-hero)]">
                         {catalog.facets.sizes.length} size
                       </div>
@@ -196,14 +263,14 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                         variant={params.category === category ? "default" : "secondary"}
                         size="sm"
                       >
-                        <Link href={`/catalog?category=${encodeURIComponent(category)}`}>{category}</Link>
+                        <Link href={`/catalog?${withPatchedParams(params, { category })}`}>{category}</Link>
                       </Button>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Brands</div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Thương hiệu</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {catalog.facets.brands.map((brand) => (
                       <Button
@@ -212,7 +279,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                         variant={params.brand === brand ? "default" : "outline"}
                         size="sm"
                       >
-                        <Link href={`/catalog?brand=${encodeURIComponent(brand)}`}>{brand}</Link>
+                        <Link href={`/catalog?${withPatchedParams(params, { brand })}`}>{brand}</Link>
                       </Button>
                     ))}
                   </div>
@@ -228,7 +295,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                         variant={params.silhouette === silhouette ? "default" : "outline"}
                         size="sm"
                       >
-                        <Link href={`/catalog?silhouette=${encodeURIComponent(silhouette)}`}>{silhouette}</Link>
+                        <Link href={`/catalog?${withPatchedParams(params, { silhouette })}`}>{silhouette}</Link>
                       </Button>
                     ))}
                   </div>
@@ -244,7 +311,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                         variant={params.size === size ? "default" : "outline"}
                         size="sm"
                       >
-                        <Link href={`/catalog?size=${encodeURIComponent(size)}`}>EU {size}</Link>
+                        <Link href={`/catalog?${withPatchedParams(params, { size })}`}>EU {size}</Link>
                       </Button>
                     ))}
                   </div>
@@ -282,6 +349,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                       src={catalog.featuredCollections[0].coverImage}
                       alt={catalog.featuredCollections[0].name}
                       fill
+                      sizes="(max-width: 768px) 100vw, 36vw"
                       className="object-cover"
                     />
                   </div>

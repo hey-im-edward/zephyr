@@ -498,7 +498,7 @@ export type CatalogQuery = {
   query?: string;
   minPrice?: number;
   maxPrice?: number;
-  sort?: string;
+  sort?: "featured" | "price-asc" | "price-desc" | "name-asc" | "newest";
   page?: number;
   pageSize?: number;
 };

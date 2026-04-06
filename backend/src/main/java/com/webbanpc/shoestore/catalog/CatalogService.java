@@ -1,11 +1,15 @@
 package com.webbanpc.shoestore.catalog;
 
 import java.math.BigDecimal;
-import java.util.Comparator;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.stream.Collectors;
+import java.util.Map;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,29 +17,31 @@ import com.webbanpc.shoestore.campaign.CampaignService;
 import com.webbanpc.shoestore.collection.CollectionResponse;
 import com.webbanpc.shoestore.collection.CollectionService;
 import com.webbanpc.shoestore.promotion.PromotionService;
+import com.webbanpc.shoestore.review.ReviewRepository;
 import com.webbanpc.shoestore.shoe.Shoe;
 import com.webbanpc.shoestore.shoe.ShoeCardResponse;
 import com.webbanpc.shoestore.shoe.ShoeRepository;
-import com.webbanpc.shoestore.shoe.ShoeService;
 
 @Service
 @Transactional(readOnly = true)
 public class CatalogService {
 
+    private static final int MAX_PAGE_SIZE = 60;
+
     private final ShoeRepository shoeRepository;
-    private final ShoeService shoeService;
+    private final ReviewRepository reviewRepository;
     private final CampaignService campaignService;
     private final PromotionService promotionService;
     private final CollectionService collectionService;
 
     public CatalogService(
             ShoeRepository shoeRepository,
-            ShoeService shoeService,
+            ReviewRepository reviewRepository,
             CampaignService campaignService,
             PromotionService promotionService,
             CollectionService collectionService) {
         this.shoeRepository = shoeRepository;
-        this.shoeService = shoeService;
+        this.reviewRepository = reviewRepository;
         this.campaignService = campaignService;
         this.promotionService = promotionService;
         this.collectionService = collectionService;
@@ -52,97 +58,133 @@ public class CatalogService {
             String sort,
             int page,
             int pageSize) {
-        List<Shoe> allShoes = shoeRepository.findAllByOrderByFeaturedDescNewArrivalDescIdDesc();
-        List<Shoe> filtered = allShoes.stream()
-                .filter(shoe -> category == null || category.isBlank() || shoe.getCategory().getSlug().equalsIgnoreCase(category))
-                .filter(shoe -> brand == null || brand.isBlank() || shoe.getBrand().equalsIgnoreCase(brand))
-                .filter(shoe -> silhouette == null || silhouette.isBlank() || shoe.getSilhouette().equalsIgnoreCase(silhouette))
-                .filter(shoe -> query == null || query.isBlank() || contains(shoe, query))
-                .filter(shoe -> minPrice == null || shoe.getPrice().compareTo(minPrice) >= 0)
-                .filter(shoe -> maxPrice == null || shoe.getPrice().compareTo(maxPrice) <= 0)
-                .filter(shoe -> size == null || size.isBlank() || shoe.getSizeStocks().stream()
-                        .anyMatch(stock -> stock.getSizeLabel().equalsIgnoreCase(size) && stock.getStockQuantity() > 0))
-                .sorted(resolveSort(sort))
-                .toList();
-
-        long totalItems = filtered.size();
         int safePage = Math.max(page, 1);
-        int safePageSize = Math.max(pageSize, 1);
-        int fromIndex = Math.min((safePage - 1) * safePageSize, filtered.size());
-        int toIndex = Math.min(fromIndex + safePageSize, filtered.size());
+        int safePageSize = Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE);
+        Page<Shoe> shoePage = shoeRepository.findCatalogItems(
+                normalizeFilter(category),
+                normalizeFilter(brand),
+                normalizeFilter(silhouette),
+                normalizeFilter(size),
+                normalizeFilter(query),
+                minPrice,
+                maxPrice,
+                PageRequest.of(safePage - 1, safePageSize, resolveSort(sort)));
 
-        List<ShoeCardResponse> items = filtered.subList(fromIndex, toIndex).stream()
-                .map(shoe -> shoeService.getById(shoe.getId()))
-                .map(detail -> new ShoeCardResponse(
-                        detail.id(),
-                        detail.name(),
-                        detail.slug(),
-                        detail.brand(),
-                        detail.silhouette(),
-                        detail.shortDescription(),
-                        detail.price(),
-                        detail.primaryImage(),
-                        detail.secondaryImage(),
-                        detail.categorySlug(),
-                        detail.categoryName(),
-                        detail.campaignBadge(),
-                        detail.featured(),
-                        detail.newArrival(),
-                        detail.bestSeller(),
-                        detail.averageRating(),
-                        detail.reviewCount()))
+        List<Shoe> pageShoes = shoePage.getContent();
+        Map<Long, ReviewMetrics> reviewMetricsByShoe = loadReviewMetrics(pageShoes.stream().map(Shoe::getId).toList());
+        List<ShoeCardResponse> items = pageShoes.stream()
+                .map(shoe -> toCardResponse(shoe, reviewMetricsByShoe.getOrDefault(shoe.getId(), ReviewMetrics.ZERO)))
                 .toList();
 
         List<CollectionResponse> featuredCollections = collectionService.listActive().stream().limit(2).toList();
         CatalogResponse.PriceRange priceRange = new CatalogResponse.PriceRange(
-                allShoes.stream().map(Shoe::getPrice).min(BigDecimal::compareTo).orElse(BigDecimal.ZERO),
-                allShoes.stream().map(Shoe::getPrice).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO));
+                defaultZero(shoeRepository.findMinPrice()),
+                defaultZero(shoeRepository.findMaxPrice()));
 
         return new CatalogResponse(
                 items,
                 new CatalogResponse.CatalogPagination(
                         safePage,
                         safePageSize,
-                        totalItems,
-                        (int) Math.max(1, Math.ceil((double) totalItems / safePageSize))),
+                        shoePage.getTotalElements(),
+                        Math.max(1, shoePage.getTotalPages())),
                 new CatalogResponse.CatalogFacets(
-                        allShoes.stream().map(shoe -> shoe.getCategory().getSlug()).distinct().sorted().toList(),
-                        allShoes.stream().map(Shoe::getBrand).distinct().sorted().toList(),
-                        allShoes.stream().map(Shoe::getSilhouette).distinct().sorted().toList(),
-                        allShoes.stream()
-                                .flatMap(shoe -> shoe.getSizeStocks().stream())
-                                .map(stock -> stock.getSizeLabel())
-                                .distinct()
-                                .sorted()
-                                .toList(),
+                        shoeRepository.findDistinctCategorySlugs(),
+                        shoeRepository.findDistinctBrands(),
+                        shoeRepository.findDistinctSilhouettes(),
+                        shoeRepository.findDistinctSizeLabels(),
                         priceRange),
                 campaignService.getFirstActiveByPlacement("CATALOG_HERO"),
                 promotionService.getFeaturedPromotion(),
                 featuredCollections);
     }
 
-    private boolean contains(Shoe shoe, String query) {
-        String normalized = query.trim().toLowerCase(Locale.ROOT);
-        return shoe.getName().toLowerCase(Locale.ROOT).contains(normalized)
-                || shoe.getBrand().toLowerCase(Locale.ROOT).contains(normalized)
-                || shoe.getSilhouette().toLowerCase(Locale.ROOT).contains(normalized)
-                || shoe.getCategory().getName().toLowerCase(Locale.ROOT).contains(normalized);
+    private Map<Long, ReviewMetrics> loadReviewMetrics(Collection<Long> shoeIds) {
+        if (shoeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, ReviewMetrics> metricsByShoe = new HashMap<>();
+        reviewRepository.findPublishedStatsByShoeIds(shoeIds)
+                .forEach(stat -> metricsByShoe.put(
+                        stat.getShoeId(),
+                        new ReviewMetrics(defaultZero(stat.getAverageRating()), stat.getReviewCount() == null ? 0L : stat.getReviewCount())));
+        return metricsByShoe;
     }
 
-    private Comparator<Shoe> resolveSort(String sort) {
+    private Sort resolveSort(String sort) {
         if (sort == null || sort.isBlank() || "featured".equalsIgnoreCase(sort)) {
-            return Comparator.comparing(Shoe::isFeatured).reversed()
-                    .thenComparing(Shoe::isNewArrival).reversed()
-                    .thenComparing(Shoe::getId, Comparator.reverseOrder());
+            return Sort.by(
+                    Sort.Order.desc("featured"),
+                    Sort.Order.desc("newArrival"),
+                    Sort.Order.desc("id"));
         }
         return switch (sort.toLowerCase(Locale.ROOT)) {
-            case "price-asc" -> Comparator.comparing(Shoe::getPrice).thenComparing(Shoe::getName);
-            case "price-desc" -> Comparator.comparing(Shoe::getPrice, Comparator.reverseOrder()).thenComparing(Shoe::getName);
-            case "name-asc" -> Comparator.comparing(Shoe::getName);
-            case "newest" -> Comparator.comparing(Shoe::isNewArrival).reversed().thenComparing(Shoe::getId, Comparator.reverseOrder());
-            default -> Comparator.comparing(Shoe::isFeatured).reversed()
-                    .thenComparing(Shoe::isNewArrival).reversed()
-                    .thenComparing(Shoe::getId, Comparator.reverseOrder());
+            case "price-asc" -> Sort.by(Sort.Order.asc("price"), Sort.Order.asc("name"));
+            case "price-desc" -> Sort.by(Sort.Order.desc("price"), Sort.Order.asc("name"));
+            case "name-asc" -> Sort.by(Sort.Order.asc("name"));
+            case "newest" -> Sort.by(Sort.Order.desc("newArrival"), Sort.Order.desc("id"));
+            default -> Sort.by(
+                    Sort.Order.desc("featured"),
+                    Sort.Order.desc("newArrival"),
+                    Sort.Order.desc("id"));
         };
+    }
+
+    private String normalizeFilter(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private BigDecimal defaultZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private double defaultZero(Double value) {
+        return value == null ? 0D : value;
+    }
+
+    private ShoeCardResponse toCardResponse(Shoe shoe, ReviewMetrics metrics) {
+        return new ShoeCardResponse(
+                shoe.getId(),
+                shoe.getName(),
+                shoe.getSlug(),
+                shoe.getBrand(),
+                shoe.getSilhouette(),
+                shoe.getShortDescription(),
+                shoe.getPrice(),
+                shoe.getPrimaryImage(),
+                shoe.getSecondaryImage(),
+                shoe.getCategory().getSlug(),
+                shoe.getCategory().getName(),
+                fallbackCampaignBadge(shoe),
+                shoe.isFeatured(),
+                shoe.isNewArrival(),
+                shoe.isBestSeller(),
+                metrics.averageRating(),
+                metrics.reviewCount());
+    }
+
+    private String fallbackCampaignBadge(Shoe shoe) {
+        if (shoe.getCampaignBadge() != null && !shoe.getCampaignBadge().isBlank()) {
+            return shoe.getCampaignBadge();
+        }
+        if (shoe.isFeatured()) {
+            return "Zephyr Select";
+        }
+        if (shoe.isNewArrival()) {
+            return "New Season";
+        }
+        if (shoe.isBestSeller()) {
+            return "Top Seller";
+        }
+        return "Curated Pair";
+    }
+
+    private record ReviewMetrics(double averageRating, long reviewCount) {
+        private static final ReviewMetrics ZERO = new ReviewMetrics(0D, 0L);
     }
 }

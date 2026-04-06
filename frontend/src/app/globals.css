@@ -64,11 +64,13 @@ body {
 
 html {
   scroll-behavior: smooth;
+  overflow-y: auto;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-y: visible;
   overflow-x: hidden;
   background:
     radial-gradient(circle at 8% 10%, rgba(121, 216, 255, 0.74), transparent 18%),
@@ -161,7 +163,7 @@ select {
 .section-shell::after {
   content: "";
   position: absolute;
-  inset: auto -4rem -7rem auto;
+  inset: auto -4rem 0 auto;
   height: min(22rem, 42vw);
   width: min(22rem, 42vw);
   border-radius: 999px;
@@ -487,5 +489,55 @@ select {
   .display-hero {
     font-size: clamp(1.8rem, 9.8vw, 2.8rem);
     line-height: 0.98;
+  }
+}
+
+@media (max-width: 420px) {
+  .page-shell,
+  .section-shell {
+    padding-inline: 0.75rem;
+  }
+
+  .brand-lockup {
+    gap: 0.55rem;
+  }
+
+  .brand-wordmark {
+    font-size: 0.94rem;
+    letter-spacing: -0.04em;
+  }
+
+  .brand-caption {
+    display: none;
+  }
+
+  .display-hero {
+    font-size: clamp(1.35rem, 9.4vw, 2rem);
+  }
+
+  .display-section {
+    font-size: clamp(1.08rem, 7.6vw, 1.45rem);
+  }
+}
+
+@media (max-width: 260px) {
+  .page-shell,
+  .section-shell {
+    padding-inline: 0.5rem;
+  }
+
+  .brand-mark-shell {
+    height: 2.45rem;
+    width: 2.45rem;
+    border-radius: 0.85rem;
+  }
+
+  .brand-wordmark {
+    font-size: 0.84rem;
+  }
+
+  .utility-label {
+    letter-spacing: 0.14em;
+    font-size: 0.56rem;
   }
 }

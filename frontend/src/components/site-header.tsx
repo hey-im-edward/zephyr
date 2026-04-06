@@ -40,28 +40,35 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-50">
-      <div className="page-shell pt-4">
+      <div className="page-shell pt-4 max-[420px]:pt-1.5 max-[319px]:pt-1">
         <div className="page-frame">
-          <div className="surface-panel overflow-hidden rounded-[2.6rem] px-4 py-4 lg:px-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center justify-between gap-3">
+          <div className="surface-panel overflow-hidden rounded-[2.6rem] px-4 py-4 max-[420px]:rounded-[1.25rem] max-[420px]:px-2 max-[420px]:py-1.5 max-[319px]:px-1.5 max-[319px]:py-1 lg:px-6">
+            <div className="flex flex-col gap-4 max-[420px]:grid max-[420px]:grid-cols-[1fr_auto] max-[420px]:items-center max-[420px]:gap-x-2 max-[420px]:gap-y-1.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center justify-between gap-3 max-[260px]:gap-1.5">
                 <Link
                   href="/"
-                  className="glass-panel min-w-0 rounded-full px-3 py-2 transition hover:border-white"
+                  className="glass-panel min-w-0 rounded-full px-3 py-2 transition hover:border-white max-[420px]:px-2 max-[420px]:py-1"
                 >
                   <BrandMark showTagline compact />
                 </Link>
 
-                <Button asChild variant="secondary" size="sm" className="sm:hidden">
-                  <Link href="/checkout">
-                    <ShoppingBag size={16} />
-                    {itemCount}
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-1 sm:hidden">
+                  <Button asChild variant="secondary" size="sm" className="hidden max-[319px]:inline-flex">
+                    <Link href="/catalog" aria-label="Bộ sưu tập">
+                      <LayoutGrid size={14} />
+                    </Link>
+                  </Button>
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href="/checkout">
+                      <ShoppingBag size={14} />
+                      {itemCount}
+                    </Link>
+                  </Button>
+                </div>
               </div>
 
-              <nav className="scrollbar-thin flex items-center gap-2 overflow-x-auto lg:justify-center">
-                <div className="flex items-center gap-1 overflow-hidden rounded-full border border-white/70 bg-white/18 p-1.5 shadow-[0_18px_40px_rgba(106,136,182,0.10)] backdrop-blur-[18px]">
+              <nav className="scrollbar-thin flex items-center gap-2 overflow-x-auto max-[420px]:col-span-2 max-[420px]:row-start-2 max-[420px]:w-full max-[420px]:justify-start max-[420px]:gap-1 max-[320px]:justify-center max-[319px]:hidden lg:justify-center">
+                <div className="flex items-center gap-1 overflow-hidden rounded-full border border-white/70 bg-white/18 p-1.5 shadow-[0_18px_40px_rgba(106,136,182,0.10)] backdrop-blur-[18px] max-[420px]:w-full max-[420px]:justify-between max-[420px]:p-1 max-[320px]:max-w-[12.5rem]">
                   {links.map((link) => {
                     const active = pathname === link.href;
                     const Icon = link.icon;
@@ -69,22 +76,23 @@ export function SiteHeader() {
                       <Link
                         key={link.href}
                         href={link.href}
+                        aria-label={link.label}
                         className={cn(
-                          "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-semibold transition duration-300",
+                          "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-4 text-xs font-semibold transition duration-300 max-[420px]:h-7 max-[420px]:gap-1 max-[420px]:px-2 max-[420px]:text-[10px] max-[260px]:px-1.5",
                           active
                             ? "liquid-button-shell text-[var(--foreground-hero)]"
                             : "text-[var(--muted)] hover:bg-white/24 hover:text-[var(--foreground)]",
                         )}
                       >
-                        <Icon size={16} />
-                        {link.label}
+                        <Icon size={14} />
+                        <span className="max-[420px]:hidden">{link.label}</span>
                       </Link>
                     );
                   })}
                 </div>
               </nav>
 
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center justify-end gap-2 max-[420px]:col-start-2 max-[420px]:row-start-1 max-[420px]:gap-1.5">
                 <Link
                   href="/checkout"
                   className="hidden h-[3.25rem] w-[12.75rem] items-center justify-between gap-3 rounded-full border border-white/70 bg-white/18 px-4 text-sm font-medium text-[var(--foreground)] shadow-[0_14px_32px_rgba(106,136,182,0.08)] backdrop-blur-[18px] transition hover:border-white sm:inline-flex"
@@ -108,18 +116,18 @@ export function SiteHeader() {
                     </Link>
                     <Link
                       href="/dang-nhap"
-                      className="inline-flex h-[3.25rem] items-center gap-3 rounded-full border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.36),rgba(171,228,255,0.26)_46%,rgba(196,181,253,0.26))] px-5 text-sm font-medium text-[var(--foreground-hero)] shadow-[0_18px_36px_rgba(126,154,220,0.14)] backdrop-blur-[22px] transition hover:border-white"
+                      className="inline-flex h-[3.25rem] items-center gap-3 rounded-full border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.36),rgba(171,228,255,0.26)_46%,rgba(196,181,253,0.26))] px-5 text-sm font-medium text-[var(--foreground-hero)] shadow-[0_18px_36px_rgba(126,154,220,0.14)] backdrop-blur-[22px] transition hover:border-white max-[420px]:h-8 max-[420px]:gap-1.5 max-[420px]:px-2 max-[420px]:text-[11px] max-[260px]:px-1.5"
                     >
-                      <LogIn size={16} />
-                      Đăng nhập
+                      <LogIn size={14} />
+                      <span className="max-[390px]:hidden">Đăng nhập</span>
                     </Link>
                   </div>
                 ) : (
-                  <div className="glass-panel flex items-center justify-end gap-2 rounded-full p-1.5">
+                  <div className="glass-panel flex items-center justify-end gap-2 rounded-full p-1.5 max-[420px]:p-1">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="glass-panel inline-flex h-[3.25rem] w-[12.75rem] items-center justify-between gap-3 rounded-full px-2 py-2 text-[var(--foreground)] transition hover:border-white">
-                          <Avatar className="h-9 w-9">
+                        <button className="glass-panel inline-flex h-[3.25rem] w-auto min-w-[3.25rem] items-center justify-between gap-3 rounded-full px-2 py-2 text-[var(--foreground)] transition hover:border-white sm:w-[12.75rem] max-[420px]:h-8 max-[420px]:min-w-8 max-[420px]:gap-1.5 max-[420px]:px-1">
+                          <Avatar className="h-9 w-9 max-[420px]:h-8 max-[420px]:w-8">
                             <AvatarFallback>{initials(user?.fullName ?? "Z")}</AvatarFallback>
                           </Avatar>
                           <div className="hidden min-w-0 flex-1 text-left sm:block">

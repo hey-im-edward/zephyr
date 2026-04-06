@@ -211,7 +211,7 @@ export default function AccountPage() {
     })
       .then(() => {
         passwordForm.reset();
-        toast.success("Đã đổi mật khẩu thành công.");
+        toast.success("Đã đổi mật khẩu. Vui lòng đăng nhập lại.");
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Không thể đổi mật khẩu.");

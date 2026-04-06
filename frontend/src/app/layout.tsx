@@ -37,7 +37,7 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
       className={`${bodyFont.variable} ${displayFont.variable} antialiased`}
     >
-      <body className="min-h-screen overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
+      <body className="overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
         <AuthProvider>
           <CartProvider>
             <div className="ambient-shell flex min-h-screen flex-col">

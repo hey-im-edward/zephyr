@@ -25,7 +25,7 @@ import {
   submitOrder,
 } from "@/lib/api";
 import { formatVnd } from "@/lib/currency";
-import { fallbackPromotions, fallbackShippingMethods } from "@/lib/storefront-fallback";
+import { fallbackPromotions, fallbackShippingMethods, isStorefrontDemoFallbackEnabled } from "@/lib/storefront-fallback";
 import type { PaymentMethod, Promotion, ShippingMethod, UserAddress } from "@/lib/types";
 
 const checkoutSchema = z.object({
@@ -41,14 +41,16 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
+type CheckoutDependencyMode = "loading" | "live" | "demo-fallback" | "unavailable";
 
 export default function CheckoutPage() {
   const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart();
-  const { user, isAuthenticated, isReady, getAccessToken } = useAuth();
+  const { user, isAuthenticated, isAdmin, isReady, getAccessToken } = useAuth();
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [orderCode, setOrderCode] = useState<string | null>(null);
+  const [checkoutDependencyMode, setCheckoutDependencyMode] = useState<CheckoutDependencyMode>("loading");
   const [isPending, startTransition] = useTransition();
   const savedAddresses = isAuthenticated ? addresses : [];
 
@@ -88,6 +90,7 @@ export default function CheckoutPage() {
         const [shippingData, promotionData] = await Promise.all([getShippingMethods(), getPromotions()]);
         setShippingMethods(shippingData);
         setPromotions(promotionData);
+        setCheckoutDependencyMode("live");
 
         form.setValue("shippingMethodSlug", shippingData[0]?.slug ?? "");
         form.setValue(
@@ -95,14 +98,25 @@ export default function CheckoutPage() {
           promotionData.find((promotion) => promotion.featured)?.code ?? promotionData[0]?.code ?? "",
         );
       } catch {
-        setShippingMethods(fallbackShippingMethods);
-        setPromotions(fallbackPromotions);
-        form.setValue("shippingMethodSlug", fallbackShippingMethods[0]?.slug ?? "");
-        form.setValue(
-          "promotionCode",
-          fallbackPromotions.find((promotion) => promotion.featured)?.code ?? fallbackPromotions[0]?.code ?? "",
-        );
-        toast.warning("Checkout đang dùng dữ liệu fallback vì backend chưa phản hồi.");
+        if (isStorefrontDemoFallbackEnabled()) {
+          setShippingMethods(fallbackShippingMethods);
+          setPromotions(fallbackPromotions);
+          setCheckoutDependencyMode("demo-fallback");
+          form.setValue("shippingMethodSlug", fallbackShippingMethods[0]?.slug ?? "");
+          form.setValue(
+            "promotionCode",
+            fallbackPromotions.find((promotion) => promotion.featured)?.code ?? fallbackPromotions[0]?.code ?? "",
+          );
+          toast.warning("Checkout đang ở chế độ demo fallback. Nút xác nhận đơn đã bị khóa cho đến khi backend phục hồi.");
+          return;
+        }
+
+        setShippingMethods([]);
+        setPromotions([]);
+        setCheckoutDependencyMode("unavailable");
+        form.setValue("shippingMethodSlug", "");
+        form.setValue("promotionCode", "");
+        toast.error("Không thể tải shipping method và promotion. Checkout đang tạm khóa để tránh gửi dữ liệu không đầy đủ.");
       }
     })();
   }, [form]);
@@ -155,9 +169,26 @@ export default function CheckoutPage() {
   const shippingFee = selectedShipping?.fee ?? 0;
   const discountAmount = selectedPromotion ? Math.round(subtotal * 0.08) : 0;
   const total = Math.max(0, subtotal + shippingFee - discountAmount);
+  const isCheckoutReadyForSubmit = checkoutDependencyMode === "live";
+  const checkoutIsDegraded = checkoutDependencyMode === "demo-fallback" || checkoutDependencyMode === "unavailable";
+
+  const checkoutGuardCopy =
+    checkoutDependencyMode === "demo-fallback"
+      ? "Checkout đang hiển thị dữ liệu demo để giữ bố cục review. Nút xác nhận đơn bị khóa cho đến khi backend shipping và promotion phản hồi lại."
+      : checkoutDependencyMode === "unavailable"
+        ? "Không thể tải shipping method và promotion từ hệ thống. Checkout đang được giữ ở chế độ an toàn để tránh gửi contract không đầy đủ."
+        : null;
 
   async function onSubmit(values: CheckoutFormValues) {
     if (items.length === 0) return;
+    if (isAdmin) {
+      toast.error("Tài khoản quản trị không được phép mua hàng.");
+      return;
+    }
+    if (!isCheckoutReadyForSubmit) {
+      toast.error("Checkout đang tạm khóa vì chưa có dữ liệu shipping và promotion từ backend.");
+      return;
+    }
 
     startTransition(() => {
       void (async () => {
@@ -191,6 +222,28 @@ export default function CheckoutPage() {
     });
   }
 
+  if (isReady && isAuthenticated && isAdmin) {
+    return (
+      <div className="section-shell flex min-h-[60vh] items-center py-20">
+        <div className="surface-strong mx-auto max-w-4xl rounded-[2.4rem] px-8 py-12 text-center">
+          <BrandMark compact className="justify-center" />
+          <div className="mt-6 font-display text-4xl font-semibold text-[var(--foreground-hero)]">Tài khoản quản trị không hỗ trợ mua hàng</div>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+            Vai trò ADMIN chỉ dùng cho vận hành. Vui lòng dùng tài khoản khách hàng để đặt đơn hoặc quay lại khu quản trị.
+          </p>
+          <div className="mt-6 flex justify-center gap-3">
+            <Button asChild>
+              <Link href="/admin">Mở bảng quản trị</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/">Về trang chủ</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className="section-shell flex min-h-[60vh] items-center py-20">
@@ -221,7 +274,7 @@ export default function CheckoutPage() {
         <section className="grid gap-5 xl:grid-cols-[1.02fr_0.98fr]">
           <div className="surface-strong rounded-[2.5rem] p-8">
             <div className="space-y-4">
-              <Badge>Checkout flow</Badge>
+              <Badge>Luồng thanh toán</Badge>
               <h1 className="display-hero max-w-4xl">
                 Hoàn tất đơn hàng bằng một luồng rõ, nhẹ và đáng tin.
               </h1>
@@ -230,11 +283,20 @@ export default function CheckoutPage() {
               </p>
             </div>
 
+            {checkoutGuardCopy ? (
+              <div className="mt-6 rounded-[1.6rem] border border-amber-300/50 bg-amber-50/80 p-4 text-sm leading-7 text-amber-950">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge variant="warning">Checkout tạm khóa</Badge>
+                  <span>{checkoutGuardCopy}</span>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-8 grid gap-4 md:grid-cols-3">
               {[
-                ["Saved address", "Áp địa chỉ mặc định vào form chỉ với một chạm."],
-                ["Shipping layer", "Hiển thị ETA và phí ship ngay trong decision zone."],
-                ["Promo contract", "Promotion chạy qua API riêng, không hard-code trong UI."],
+                ["Địa chỉ đã lưu", "Áp địa chỉ mặc định vào form chỉ với một chạm."],
+                ["Lớp giao hàng", "Hiển thị ETA và phí ship ngay trong decision zone."],
+                ["Contract ưu đãi", "Ưu đãi chạy qua API riêng, không hard-code trong UI."],
               ].map(([title, copy]) => (
                 <div key={title} className="rounded-[1.6rem] border border-[var(--line)] bg-white/62 p-4">
                   <div className="font-semibold text-[var(--foreground-hero)]">{title}</div>
@@ -247,7 +309,7 @@ export default function CheckoutPage() {
           <div className="surface-admin rounded-[2.5rem] p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="utility-label">Summary</div>
+                <div className="utility-label">Tóm tắt</div>
                 <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">
                   {formatVnd(total)}
                 </div>
@@ -318,11 +380,11 @@ export default function CheckoutPage() {
                 <span>{formatVnd(subtotal)}</span>
               </div>
               <div className="mt-3 flex items-center justify-between text-sm text-[var(--muted)]">
-                <span>Shipping</span>
+                <span>Phí giao hàng</span>
                 <span>{formatVnd(shippingFee)}</span>
               </div>
               <div className="mt-3 flex items-center justify-between text-sm text-[var(--muted)]">
-                <span>Discount</span>
+                <span>Giảm giá</span>
                 <span>-{formatVnd(discountAmount)}</span>
               </div>
               <div className="mt-4 flex items-center justify-between text-lg font-semibold text-[var(--foreground-hero)]">
@@ -337,7 +399,7 @@ export default function CheckoutPage() {
           <div className="surface-admin rounded-[2.3rem] p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="utility-label">Address book</div>
+                <div className="utility-label">Sổ địa chỉ</div>
                 <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">
                   {isAuthenticated ? "Địa chỉ đã lưu" : "Checkout của khách"}
                 </div>
@@ -361,7 +423,7 @@ export default function CheckoutPage() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-semibold text-[var(--foreground-hero)]">{address.label}</div>
-                      {address.defaultAddress ? <Badge>Default</Badge> : null}
+                      {address.defaultAddress ? <Badge>Mặc định</Badge> : null}
                     </div>
                     <div className="mt-2 text-sm text-[var(--muted)]">
                       {address.recipientName} • {address.phone}
@@ -382,33 +444,39 @@ export default function CheckoutPage() {
 
             <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5">
               <div className="text-sm font-semibold text-[var(--foreground-hero)]">Phương thức giao hàng</div>
-              <div className="mt-4 grid gap-3">
-                {shippingMethods.map((method) => (
-                  <label
-                    key={method.id}
-                    className={`rounded-[1.5rem] border p-4 transition ${
-                      selectedShipping?.slug === method.slug
-                        ? "border-[var(--line-strong)] bg-[linear-gradient(135deg,rgba(255,255,255,0.82),rgba(244,248,255,0.7))]"
-                        : "border-[var(--line)] bg-white/62"
-                    }`}
-                  >
-                    <input type="radio" value={method.slug} {...form.register("shippingMethodSlug")} className="sr-only" />
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-semibold text-[var(--foreground-hero)]">{method.name}</div>
-                        <div className="mt-1 text-sm leading-6 text-[var(--muted)]">{method.description}</div>
-                        <div className="mt-2 text-sm text-[var(--muted)]">{method.etaLabel}</div>
+              {shippingMethods.length > 0 ? (
+                <div className="mt-4 grid gap-3">
+                  {shippingMethods.map((method) => (
+                    <label
+                      key={method.id}
+                      className={`rounded-[1.5rem] border p-4 transition ${
+                        selectedShipping?.slug === method.slug
+                          ? "border-[var(--line-strong)] bg-[linear-gradient(135deg,rgba(255,255,255,0.82),rgba(244,248,255,0.7))]"
+                          : "border-[var(--line)] bg-white/62"
+                      }`}
+                    >
+                      <input type="radio" value={method.slug} {...form.register("shippingMethodSlug")} className="sr-only" />
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-[var(--foreground-hero)]">{method.name}</div>
+                          <div className="mt-1 text-sm leading-6 text-[var(--muted)]">{method.description}</div>
+                          <div className="mt-2 text-sm text-[var(--muted)]">{method.etaLabel}</div>
+                        </div>
+                        <div className="text-sm font-semibold text-[var(--foreground-hero)]">{formatVnd(method.fee)}</div>
                       </div>
-                      <div className="text-sm font-semibold text-[var(--foreground-hero)]">{formatVnd(method.fee)}</div>
-                    </div>
-                  </label>
-                ))}
-              </div>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-[1.5rem] border border-dashed border-[var(--line)] bg-white/62 p-4 text-sm leading-7 text-[var(--muted)]">
+                  Chưa thể tải phương thức giao hàng từ backend. Khi dữ liệu sẵn sàng, các lựa chọn giao hàng sẽ xuất hiện tại đây.
+                </div>
+              )}
             </div>
 
             {promotions.length > 0 ? (
               <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5">
-                <div className="text-sm font-semibold text-[var(--foreground-hero)]">Promotion</div>
+                <div className="text-sm font-semibold text-[var(--foreground-hero)]">Ưu đãi</div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {promotions.map((promotion) => (
                     <button
@@ -434,6 +502,10 @@ export default function CheckoutPage() {
                     </div>
                   </div>
                 ) : null}
+              </div>
+            ) : checkoutIsDegraded ? (
+              <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5 text-sm leading-7 text-[var(--muted)]">
+                Promotion đang tạm ẩn vì frontend chưa nhận được contract ưu đãi từ backend. Khi hệ thống phục hồi, khu vực này sẽ hiển thị lại bình thường.
               </div>
             ) : null}
           </div>
@@ -527,6 +599,12 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
 
+              {checkoutGuardCopy ? (
+                <div className="rounded-[1.5rem] border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm leading-7 text-amber-950">
+                  {checkoutGuardCopy}
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {!isAuthenticated ? (
                   <div className="text-sm text-[var(--muted)]">
@@ -540,8 +618,14 @@ export default function CheckoutPage() {
                   <div className="text-sm text-[var(--muted)]">Đơn này sẽ xuất hiện cùng địa chỉ và lịch sử mua trong khu tài khoản.</div>
                 )}
 
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Đang gửi đơn..." : "Xác nhận đặt hàng"}
+                <Button type="submit" disabled={isPending || !isCheckoutReadyForSubmit}>
+                  {isPending
+                    ? "Đang gửi đơn..."
+                    : checkoutDependencyMode === "loading"
+                      ? "Đang tải phương thức..."
+                      : isCheckoutReadyForSubmit
+                        ? "Xác nhận đặt hàng"
+                        : "Tạm khóa xác nhận đơn"}
                 </Button>
               </div>
             </form>

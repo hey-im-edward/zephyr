@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,9 +19,11 @@ import com.webbanpc.shoestore.promotion.PromotionService;
 import com.webbanpc.shoestore.shoe.Shoe;
 import com.webbanpc.shoestore.shoe.ShoeRepository;
 import com.webbanpc.shoestore.shoe.ShoeSizeStock;
+import com.webbanpc.shoestore.shoe.ShoeSizeStockRepository;
 import com.webbanpc.shoestore.shipping.ShippingMethod;
 import com.webbanpc.shoestore.shipping.ShippingMethodService;
 import com.webbanpc.shoestore.user.UserAccount;
+import com.webbanpc.shoestore.user.UserRole;
 
 @Service
 @Transactional(readOnly = true)
@@ -28,6 +31,7 @@ public class OrderService {
 
     private final CustomerOrderRepository customerOrderRepository;
     private final ShoeRepository shoeRepository;
+    private final ShoeSizeStockRepository shoeSizeStockRepository;
     private final ShippingMethodService shippingMethodService;
     private final PromotionService promotionService;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
@@ -35,11 +39,13 @@ public class OrderService {
     public OrderService(
             CustomerOrderRepository customerOrderRepository,
             ShoeRepository shoeRepository,
+            ShoeSizeStockRepository shoeSizeStockRepository,
             ShippingMethodService shippingMethodService,
             PromotionService promotionService,
             OrderStatusHistoryRepository orderStatusHistoryRepository) {
         this.customerOrderRepository = customerOrderRepository;
         this.shoeRepository = shoeRepository;
+        this.shoeSizeStockRepository = shoeSizeStockRepository;
         this.shippingMethodService = shippingMethodService;
         this.promotionService = promotionService;
         this.orderStatusHistoryRepository = orderStatusHistoryRepository;
@@ -47,6 +53,10 @@ public class OrderService {
 
     @Transactional
     public OrderResponse create(UserAccount user, OrderRequest request) {
+        if (user != null && user.getRole() == UserRole.ADMIN) {
+            throw new AccessDeniedException("Admin accounts are not allowed to place orders");
+        }
+
         ShippingMethod shippingMethod = request.shippingMethodSlug() != null && !request.shippingMethodSlug().isBlank()
                 ? shippingMethodService.findEntityBySlug(request.shippingMethodSlug())
                 : null;
@@ -76,14 +86,12 @@ public class OrderService {
                 .build();
 
         BigDecimal totalAmount = BigDecimal.ZERO;
-        for (OrderItemRequest item : request.items()) {
-            Shoe shoe = shoeRepository.findBySlug(item.shoeSlug())
-                    .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + item.shoeSlug()));
-
-            ShoeSizeStock sizeStock = shoe.getSizeStocks().stream()
-                    .filter(size -> size.getSizeLabel().equalsIgnoreCase(item.sizeLabel()))
-                    .findFirst()
-                    .orElseThrow(() -> new BadRequestException("Selected size is not available: " + item.sizeLabel()));
+        for (OrderItemRequest item : request.items().stream().sorted(orderItemRequestComparator()).toList()) {
+            ShoeSizeStock sizeStock = findSizeStockForUpdateOrThrow(
+                    item.shoeSlug(),
+                    item.sizeLabel(),
+                    "Selected size is not available: " + item.sizeLabel());
+            Shoe shoe = sizeStock.getShoe();
 
             if (sizeStock.getStockQuantity() < item.quantity()) {
                 throw new BadRequestException("Not enough stock for " + shoe.getName() + " size " + item.sizeLabel());
@@ -188,22 +196,23 @@ public class OrderService {
     }
 
     private void restock(CustomerOrder order) {
-        order.getItems().forEach(item -> shoeRepository.findBySlug(item.getShoeSlug())
-                .flatMap(shoe -> shoe.getSizeStocks().stream()
-                        .filter(size -> size.getSizeLabel().equalsIgnoreCase(item.getSizeLabel()))
-                        .findFirst())
-                .ifPresent(sizeStock -> sizeStock.setStockQuantity(sizeStock.getStockQuantity() + item.getQuantity())));
+        order.getItems().stream()
+                .sorted(orderItemComparator())
+                .forEach(item -> {
+                    ShoeSizeStock sizeStock = findSizeStockForUpdateOrThrow(
+                            item.getShoeSlug(),
+                            item.getSizeLabel(),
+                            "Size not found while restoring stock for " + item.getShoeName());
+                    sizeStock.setStockQuantity(sizeStock.getStockQuantity() + item.getQuantity());
+                });
     }
 
     private void deductStock(CustomerOrder order) {
-        for (OrderItem item : order.getItems()) {
-            Shoe shoe = shoeRepository.findBySlug(item.getShoeSlug())
-                    .orElseThrow(() -> new ResourceNotFoundException("Shoe not found: " + item.getShoeSlug()));
-
-            ShoeSizeStock sizeStock = shoe.getSizeStocks().stream()
-                    .filter(size -> size.getSizeLabel().equalsIgnoreCase(item.getSizeLabel()))
-                    .findFirst()
-                    .orElseThrow(() -> new BadRequestException("Size not found for " + item.getShoeName()));
+        for (OrderItem item : order.getItems().stream().sorted(orderItemComparator()).toList()) {
+            ShoeSizeStock sizeStock = findSizeStockForUpdateOrThrow(
+                    item.getShoeSlug(),
+                    item.getSizeLabel(),
+                    "Size not found for " + item.getShoeName());
 
             if (sizeStock.getStockQuantity() < item.getQuantity()) {
                 throw new BadRequestException("Cannot restore order from cancelled state because stock is no longer available");
@@ -211,6 +220,26 @@ public class OrderService {
 
             sizeStock.setStockQuantity(sizeStock.getStockQuantity() - item.getQuantity());
         }
+    }
+
+    private ShoeSizeStock findSizeStockForUpdateOrThrow(String shoeSlug, String sizeLabel, String missingSizeMessage) {
+        return shoeSizeStockRepository.findByShoeSlugAndSizeLabelForUpdate(shoeSlug, sizeLabel)
+                .orElseThrow(() -> {
+                    if (shoeRepository.findBySlug(shoeSlug).isEmpty()) {
+                        return new ResourceNotFoundException("Shoe not found: " + shoeSlug);
+                    }
+                    return new BadRequestException(missingSizeMessage);
+                });
+    }
+
+    private Comparator<OrderItemRequest> orderItemRequestComparator() {
+        return Comparator.comparing(OrderItemRequest::shoeSlug)
+                .thenComparing(OrderItemRequest::sizeLabel, String.CASE_INSENSITIVE_ORDER);
+    }
+
+    private Comparator<OrderItem> orderItemComparator() {
+        return Comparator.comparing(OrderItem::getShoeSlug)
+                .thenComparing(OrderItem::getSizeLabel, String.CASE_INSENSITIVE_ORDER);
     }
 
     private OrderResponse toResponse(CustomerOrder order) {

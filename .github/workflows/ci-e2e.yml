@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 45
     services:
       mysql:
-        image: mysql:8.4
+        image: mysql:8.1
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: shoe_store
@@ -45,6 +45,10 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/shoe_store?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
+      APP_ADMIN_USERNAME: admin@zephyr.vn
+      APP_ADMIN_PASSWORD: TestAdminPassword123!
+      APP_JWT_SECRET: ci-e2e-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+      APP_CORS_ALLOWED_ORIGINS: http://127.0.0.1:3000,http://localhost:3000
       SPRING_PROFILES_ACTIVE: test
     steps:
       - uses: actions/checkout@v4
@@ -108,8 +112,18 @@ jobs:
           curl -fsS http://127.0.0.1:8080/api/v1/home >/dev/null
           curl -fsS http://127.0.0.1:3000 >/dev/null
 
+      - name: Ensure Playwright suite exists
+        run: |
+          if [ ! -f "frontend/playwright.config.ts" ]; then
+            echo "Missing frontend/playwright.config.ts"
+            exit 1
+          fi
+          if [ -z "$(find frontend/tests/e2e -name '*.spec.ts' -print -quit)" ]; then
+            echo "Missing Playwright spec files in frontend/tests/e2e"
+            exit 1
+          fi
+
       - name: Install Playwright browsers
-        if: ${{ hashFiles('frontend/playwright.config.*') != '' || hashFiles('frontend/tests/e2e/**') != '' || hashFiles('frontend/vitest.config.ts') != '' }}
         working-directory: frontend
         run: npx playwright install --with-deps
 
@@ -119,10 +133,5 @@ jobs:
         run: npm run test:storybook
 
       - name: Run Playwright tests
-        if: ${{ hashFiles('frontend/playwright.config.*') != '' || hashFiles('frontend/tests/e2e/**') != '' }}
         working-directory: frontend
         run: npx playwright test
-
-      - name: No Playwright suite found
-        if: ${{ hashFiles('frontend/playwright.config.*') == '' && hashFiles('frontend/tests/e2e/**') == '' }}
-        run: echo "Playwright suite not present yet; smoke checks completed."

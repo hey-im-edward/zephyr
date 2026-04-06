@@ -17,7 +17,7 @@ on:
         description: MySQL image to use for tests
         required: false
         type: string
-        default: mysql:8.4
+        default: mysql:8.1
 
 permissions:
   contents: read
@@ -47,6 +47,9 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/shoe_store?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
+      APP_ADMIN_USERNAME: admin@zephyr.vn
+      APP_ADMIN_PASSWORD: TestAdminPassword123!
+      APP_JWT_SECRET: ci-backend-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz
       SPRING_PROFILES_ACTIVE: test
     steps:
       - uses: actions/checkout@v4

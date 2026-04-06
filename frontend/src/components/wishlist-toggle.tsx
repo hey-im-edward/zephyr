@@ -16,13 +16,14 @@ type WishlistToggleProps = {
 
 export function WishlistToggle({ shoeSlug, className }: WishlistToggleProps) {
   const router = useRouter();
-  const { isAuthenticated, getAccessToken } = useAuth();
+  const { isAuthenticated, isAdmin, isReady, getAccessToken } = useAuth();
   const [isSaved, setIsSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const displaySaved = isAuthenticated && isSaved;
+  const isWishlistBlocked = isReady && isAuthenticated && isAdmin;
+  const displaySaved = isAuthenticated && !isWishlistBlocked && isSaved;
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isWishlistBlocked) return;
 
     void (async () => {
       try {
@@ -34,9 +35,14 @@ export function WishlistToggle({ shoeSlug, className }: WishlistToggleProps) {
         // Ignore non-critical hydration errors for the toggle shell.
       }
     })();
-  }, [getAccessToken, isAuthenticated, shoeSlug]);
+  }, [getAccessToken, isAuthenticated, isWishlistBlocked, shoeSlug]);
 
   function handleClick() {
+    if (isWishlistBlocked) {
+      toast.error("Tài khoản quản trị không được phép dùng wishlist.");
+      return;
+    }
+
     if (!isAuthenticated) {
       router.push(`/dang-nhap?redirect=/shoes/${shoeSlug}`);
       return;
@@ -72,11 +78,17 @@ export function WishlistToggle({ shoeSlug, className }: WishlistToggleProps) {
       type="button"
       variant={displaySaved ? "default" : "secondary"}
       onClick={handleClick}
-      disabled={isPending}
+      disabled={isPending || isWishlistBlocked}
       className={className}
     >
       <HeartPulse size={16} />
-      {isPending ? "Đang lưu..." : displaySaved ? "Đã lưu wishlist" : "Lưu vào wishlist"}
+      {isWishlistBlocked
+        ? "Wishlist bị khóa"
+        : isPending
+          ? "Đang lưu..."
+          : displaySaved
+            ? "Đã lưu wishlist"
+            : "Lưu vào wishlist"}
     </Button>
   );
 }

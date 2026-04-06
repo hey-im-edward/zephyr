@@ -22,12 +22,33 @@ jobs:
     if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    services:
+      mysql:
+        image: mysql:8.1
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: shoe_store
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     environment:
       name: preview
       url: ${{ vars.PREVIEW_URL }}
     env:
       PREVIEW_DEPLOY_URL: ${{ vars.PREVIEW_DEPLOY_URL }}
       PREVIEW_DEPLOY_TOKEN: ${{ secrets.PREVIEW_DEPLOY_TOKEN }}
+      PREVIEW_URL: ${{ vars.PREVIEW_URL }}
+      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/shoe_store?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      APP_ADMIN_USERNAME: admin@zephyr.vn
+      APP_ADMIN_PASSWORD: TestAdminPassword123!
+      APP_JWT_SECRET: ci-preview-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+      SPRING_PROFILES_ACTIVE: test
     steps:
       - uses: actions/checkout@v4
 
@@ -51,15 +72,44 @@ jobs:
 
       - name: Build backend
         working-directory: backend
-        run: ./mvnw -B -DskipTests package
+        run: ./mvnw -B verify
 
-      - name: Deploy preview
+      - name: Validate deploy inputs
         run: |
           if [ -z "$PREVIEW_DEPLOY_URL" ]; then
-            echo "PREVIEW_DEPLOY_URL is not set; preview deploy is a placeholder."
-            exit 0
+            echo "PREVIEW_DEPLOY_URL is required."
+            exit 1
           fi
-          echo "Deploying preview to $PREVIEW_DEPLOY_URL"
-          if [ -n "$PREVIEW_DEPLOY_TOKEN" ]; then
-            echo "Preview deploy token is available."
+          if [ -z "$PREVIEW_DEPLOY_TOKEN" ]; then
+            echo "PREVIEW_DEPLOY_TOKEN is required."
+            exit 1
           fi
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "PREVIEW_URL is required for post-deploy health checks."
+            exit 1
+          fi
+
+      - name: Trigger preview deploy
+        run: |
+          curl --fail-with-body --show-error --silent \
+            -X POST "$PREVIEW_DEPLOY_URL" \
+            -H "Authorization: Bearer $PREVIEW_DEPLOY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"environment":"preview","source":"github-actions"}'
+
+      - name: Verify preview health
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl -fsS "$PREVIEW_URL" >/dev/null; then
+              echo "Preview health check passed."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Preview health check failed after deploy."
+          exit 1
+
+      - name: Rollback note
+        if: ${{ failure() }}
+        run: |
+          echo "Deployment failed. Roll back to the last stable release in your platform and run smoke checks against $PREVIEW_URL."

@@ -11,6 +11,43 @@ import type {
   ShoeCard,
 } from "@/lib/types";
 
+const demoFallbackEnabled = process.env.NEXT_PUBLIC_ENABLE_STOREFRONT_DEMO_FALLBACK === "true";
+
+export type StorefrontDataMode = "live" | "demo-fallback" | "unavailable";
+
+export type StorefrontDataResult<T> = {
+  mode: StorefrontDataMode;
+  data: T | null;
+};
+
+export function isStorefrontDemoFallbackEnabled() {
+  return demoFallbackEnabled;
+}
+
+export async function resolveStorefrontData<T>(
+  loadLiveData: () => Promise<T>,
+  fallbackData: T,
+): Promise<StorefrontDataResult<T>> {
+  try {
+    return {
+      mode: "live",
+      data: await loadLiveData(),
+    };
+  } catch {
+    if (demoFallbackEnabled) {
+      return {
+        mode: "demo-fallback",
+        data: fallbackData,
+      };
+    }
+
+    return {
+      mode: "unavailable",
+      data: null,
+    };
+  }
+}
+
 const fallbackCategories: Category[] = [
   {
     id: 1,
@@ -194,9 +231,9 @@ const fallbackHeroCampaign: Campaign = {
 
 const fallbackPromotion: Promotion = {
   id: 501,
-  code: "SKYGLASS",
-  title: "Sky Glass Launch",
-  description: "Ưu đãi mở đầu cho storefront V3 với transparent glass rõ hơn và product focus sạch hơn.",
+  code: "AIRYDROP",
+  title: "Airy Glass Launch",
+  description: "Ưu đãi cho đợt tái thiết kế storefront với trải nghiệm kính sáng cao cấp.",
   badge: "Launch benefit",
   discountLabel: "Giảm 8% cho đơn đầu",
   heroTone: "linear-gradient(135deg, rgba(255,255,255,0.18), rgba(121,216,255,0.22), rgba(140,127,255,0.2))",
@@ -329,7 +366,7 @@ export const fallbackShippingMethods: ShippingMethod[] = [
   {
     id: 802,
     name: "Giao nhanh nội thành",
-    slug: "express-city",
+    slug: "express",
     description: "Ưu tiên nội thành với thời gian rút ngắn cho các đôi flagship.",
     fee: 60000,
     etaLabel: "Trong ngày",
@@ -356,7 +393,7 @@ export const fallbackPromotions: Promotion[] = [
     code: "RUNCLUB",
     title: "Run club welcome",
     badge: "Community perk",
-    discountLabel: "Tặng ship nội thành",
+    discountLabel: "Giảm 120.000đ",
     featured: false,
   },
 ];
@@ -394,10 +431,12 @@ export function getFallbackCatalog(query: CatalogQuery = {}): CatalogData {
 
   const sortedItems = [...filteredItems].sort((a, b) => {
     switch (query.sort) {
-      case "priceAsc":
+      case "price-asc":
         return a.price - b.price;
-      case "priceDesc":
+      case "price-desc":
         return b.price - a.price;
+      case "name-asc":
+        return a.name.localeCompare(b.name);
       case "newest":
         return Number(b.newArrival) - Number(a.newArrival);
       case "featured":

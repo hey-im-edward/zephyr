@@ -169,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     changePasswordAction: async (payload) => {
       const token = await requireAccessToken();
       await changePassword(token, payload);
+      setSession(null);
     },
   };
 

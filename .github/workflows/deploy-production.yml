@@ -14,12 +14,33 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.1
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: shoe_store
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     environment:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
     env:
       PRODUCTION_DEPLOY_URL: ${{ vars.PRODUCTION_DEPLOY_URL }}
       PRODUCTION_DEPLOY_TOKEN: ${{ secrets.PRODUCTION_DEPLOY_TOKEN }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/shoe_store?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      APP_ADMIN_USERNAME: admin@zephyr.vn
+      APP_ADMIN_PASSWORD: TestAdminPassword123!
+      APP_JWT_SECRET: ci-production-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+      SPRING_PROFILES_ACTIVE: test
     steps:
       - uses: actions/checkout@v4
 
@@ -43,15 +64,44 @@ jobs:
 
       - name: Build backend
         working-directory: backend
-        run: ./mvnw -B -DskipTests package
+        run: ./mvnw -B verify
 
-      - name: Deploy production
+      - name: Validate deploy inputs
         run: |
           if [ -z "$PRODUCTION_DEPLOY_URL" ]; then
-            echo "PRODUCTION_DEPLOY_URL is not set; production deploy is a placeholder."
-            exit 0
+            echo "PRODUCTION_DEPLOY_URL is required."
+            exit 1
           fi
-          echo "Deploying production to $PRODUCTION_DEPLOY_URL"
-          if [ -n "$PRODUCTION_DEPLOY_TOKEN" ]; then
-            echo "Production deploy token is available."
+          if [ -z "$PRODUCTION_DEPLOY_TOKEN" ]; then
+            echo "PRODUCTION_DEPLOY_TOKEN is required."
+            exit 1
           fi
+          if [ -z "$PRODUCTION_URL" ]; then
+            echo "PRODUCTION_URL is required for post-deploy health checks."
+            exit 1
+          fi
+
+      - name: Trigger production deploy
+        run: |
+          curl --fail-with-body --show-error --silent \
+            -X POST "$PRODUCTION_DEPLOY_URL" \
+            -H "Authorization: Bearer $PRODUCTION_DEPLOY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"environment":"production","source":"github-actions"}'
+
+      - name: Verify production health
+        run: |
+          for attempt in $(seq 1 20); do
+            if curl -fsS "$PRODUCTION_URL" >/dev/null; then
+              echo "Production health check passed."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Production health check failed after deploy."
+          exit 1
+
+      - name: Rollback note
+        if: ${{ failure() }}
+        run: |
+          echo "Deployment failed. Roll back to the last stable release in your platform and run smoke checks against $PRODUCTION_URL."
