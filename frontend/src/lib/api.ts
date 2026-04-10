@@ -16,15 +16,21 @@ import type {
   ChangePasswordPayload,
   CollectionInput,
   CurrentUserResponse,
+  ChatbotCompletionRequest,
+  ChatbotCompletionResponse,
   HomeData,
   LoginPayload,
   MediaAsset,
   MediaAssetInput,
   MerchCollection,
   OrderDetail,
+  OrderListData,
   OrderPayload,
   OrderResponse,
+  PaymentConfirmRequest,
   PaymentMethod,
+  PaymentSessionData,
+  PaymentSessionRequest,
   ProfileUpdatePayload,
   Promotion,
   PromotionInput,
@@ -303,8 +309,45 @@ export async function submitOrder(payload: OrderPayload, token?: string | null):
   });
 }
 
-export async function listMyOrders(token: string): Promise<OrderResponse[]> {
-  return request<OrderResponse[]>("/account/orders", { token });
+export async function createPaymentSession(payload: PaymentSessionRequest): Promise<PaymentSessionData> {
+  return request<PaymentSessionData>("/payments/sessions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getPaymentSessionStatus(orderCode: string, referenceToken: string): Promise<PaymentSessionData> {
+  const qs = buildQuery({ orderCode, referenceToken });
+  return request<PaymentSessionData>(`/payments/sessions/status${qs ? `?${qs}` : ""}`);
+}
+
+export async function confirmMockPayment(payload: PaymentConfirmRequest): Promise<PaymentSessionData> {
+  return request<PaymentSessionData>("/payments/mock/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function requestChatbotCompletion(payload: ChatbotCompletionRequest): Promise<ChatbotCompletionResponse> {
+  return request<ChatbotCompletionResponse>("/chatbot/completions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listMyOrders(token: string, page = 1, pageSize = 10): Promise<OrderListData> {
+  const qs = buildQuery({ page, pageSize });
+  const data = await request<OrderListData>(`/account/orders${qs ? `?${qs}` : ""}`, { token });
+  return {
+    ...data,
+    items: ensureArray(data?.items),
+    pagination: {
+      page: data?.pagination?.page ?? 1,
+      pageSize: data?.pagination?.pageSize ?? pageSize,
+      totalItems: data?.pagination?.totalItems ?? 0,
+      totalPages: data?.pagination?.totalPages ?? 1,
+    },
+  };
 }
 
 export async function getMyOrder(token: string, orderId: number): Promise<OrderDetail> {
@@ -434,10 +477,27 @@ export async function deleteAdminCategory(token: string, categoryId: number): Pr
   });
 }
 
-export async function listAdminOrders(token: string, status?: string, query?: string): Promise<OrderResponse[]> {
-  const qs = buildQuery({ status, query });
-  const data = await request<OrderResponse[]>(`/admin/orders${qs ? `?${qs}` : ""}`, { token });
-  return ensureArray(data);
+export async function listAdminOrders(
+  token: string,
+  params: {
+    status?: string;
+    query?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<OrderListData> {
+  const qs = buildQuery(params);
+  const data = await request<OrderListData>(`/admin/orders${qs ? `?${qs}` : ""}`, { token });
+  return {
+    ...data,
+    items: ensureArray(data?.items),
+    pagination: {
+      page: data?.pagination?.page ?? 1,
+      pageSize: data?.pagination?.pageSize ?? (params.pageSize ?? 20),
+      totalItems: data?.pagination?.totalItems ?? 0,
+      totalPages: data?.pagination?.totalPages ?? 1,
+    },
+  };
 }
 
 export async function getAdminOrder(token: string, orderId: number): Promise<OrderDetail> {
@@ -676,4 +736,7 @@ export async function getAdminAuditLogs(token: string): Promise<AuditLog[]> {
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   COD: "Thanh toán khi nhận hàng",
   BANK_TRANSFER: "Chuyển khoản ngân hàng",
+  CARD: "Thẻ tín dụng / ghi nợ",
+  BANK_QR: "Quét QR ngân hàng",
+  EWALLET: "Ví điện tử",
 };

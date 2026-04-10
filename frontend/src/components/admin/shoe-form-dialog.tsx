@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import type { Category, ShoeDetail, ShoeInput } from "@/lib/types";
@@ -244,19 +245,22 @@ export function ShoeFormDialog({ open, onOpenChange, categories, initialValue, o
               </div>
               <div className="space-y-2">
                 <Label htmlFor="shoe-category">Danh mục</Label>
-                <select
-                  id="shoe-category"
+                <Select
                   value={draft.categorySlug}
-                  onChange={(event) => setDraft((current) => ({ ...current, categorySlug: event.target.value }))}
-                  className="flex h-11 w-full rounded-2xl border border-white/12 bg-[#08101d] px-4 py-2 text-sm text-white outline-none focus:border-amber-300/70"
-                  required
+                  onValueChange={(nextSlug) => setDraft((current) => ({ ...current, categorySlug: nextSlug }))}
+                  disabled={categories.length === 0}
                 >
-                  {categories.map((category) => (
-                    <option key={category.slug} value={category.slug} className="bg-slate-950">
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="shoe-category" aria-label="Danh mục" data-testid="shoe-category-select-trigger" className="h-11">
+                    <SelectValue placeholder={categories.length === 0 ? "Chưa có danh mục" : "Chọn danh mục"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.slug} value={category.slug}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>

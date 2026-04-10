@@ -32,7 +32,7 @@ import {
 } from "@/lib/api";
 import { formatVnd } from "@/lib/currency";
 import { formatDateTime, initials } from "@/lib/presentation";
-import type { AddressInput, OrderDetail, OrderResponse, UserAddress, WishlistItem } from "@/lib/types";
+import type { AddressInput, OrderDetail, OrderPagination, OrderResponse, UserAddress, WishlistItem } from "@/lib/types";
 
 const profileSchema = z.object({
   fullName: z.string().min(2, "Họ tên quá ngắn."),
@@ -63,6 +63,8 @@ type ProfileValues = z.infer<typeof profileSchema>;
 type PasswordValues = z.infer<typeof passwordSchema>;
 type AddressValues = z.infer<typeof addressSchema>;
 
+const ORDER_PAGE_SIZE = 8;
+
 export default function AccountPage() {
   const router = useRouter();
   const {
@@ -75,6 +77,12 @@ export default function AccountPage() {
     changePasswordAction,
   } = useAuth();
   const [orders, setOrders] = useState<OrderResponse[]>([]);
+  const [orderPagination, setOrderPagination] = useState<OrderPagination>({
+    page: 1,
+    pageSize: ORDER_PAGE_SIZE,
+    totalItems: 0,
+    totalPages: 1,
+  });
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
@@ -84,6 +92,7 @@ export default function AccountPage() {
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
   const [isAddressSaving, setIsAddressSaving] = useState(false);
+  const [isOrderPaging, setIsOrderPaging] = useState(false);
   const [busyAddressId, setBusyAddressId] = useState<number | null>(null);
   const [busyWishlistSlug, setBusyWishlistSlug] = useState<string | null>(null);
 
@@ -122,7 +131,7 @@ export default function AccountPage() {
 
     const [currentUserResult, orderListResult, addressListResult, wishlistResult] = await Promise.allSettled([
       reloadUser(),
-      listMyOrders(token),
+      listMyOrders(token, 1, ORDER_PAGE_SIZE),
       getMyAddresses(token),
       getWishlist(token),
     ]);
@@ -144,7 +153,8 @@ export default function AccountPage() {
     const failedSections: string[] = [];
 
     if (orderListResult.status === "fulfilled") {
-      setOrders(orderListResult.value);
+      setOrders(orderListResult.value.items);
+      setOrderPagination(orderListResult.value.pagination);
     } else {
       failedSections.push("đơn hàng");
     }
@@ -169,6 +179,20 @@ export default function AccountPage() {
       toast.error(`Một số phần dữ liệu tài khoản chưa tải được: ${failedSections.join(", ")}.`);
     }
   }, [addressForm, getAccessToken, profileForm, reloadUser, user]);
+
+  const loadOrdersPage = useCallback(
+    async (targetPage: number) => {
+      const token = await getAccessToken();
+      if (!token) {
+        toast.error("Phiên đăng nhập đã hết hạn.");
+        return;
+      }
+      const data = await listMyOrders(token, targetPage, ORDER_PAGE_SIZE);
+      setOrders(data.items);
+      setOrderPagination(data.pagination);
+    },
+    [getAccessToken],
+  );
 
   useEffect(() => {
     if (!isReady || !isAuthenticated || user?.role === "ADMIN") return;
@@ -208,6 +232,21 @@ export default function AccountPage() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không thể tải chi tiết đơn.");
     }
+  }
+
+  function handleOrderPageChange(nextPage: number) {
+    if (nextPage < 1 || nextPage > orderPagination.totalPages || nextPage === orderPagination.page) {
+      return;
+    }
+
+    setIsOrderPaging(true);
+    void loadOrdersPage(nextPage)
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Không thể tải thêm đơn hàng.");
+      })
+      .finally(() => {
+        setIsOrderPaging(false);
+      });
   }
 
   function submitProfile(values: ProfileValues) {
@@ -319,8 +358,8 @@ export default function AccountPage() {
   if (!isReady || isLoading) {
     return (
       <div className="section-shell flex py-24">
-        <div className="mx-auto flex items-center gap-3 text-[var(--muted)]">
-          <span className="font-display italic text-[var(--foreground-hero)]">ZEPHYR</span>
+        <div className="mx-auto flex items-center gap-3 text-(--muted)">
+          <span className="font-display italic text-(--foreground-hero)">ZEPHYR</span>
           <span>đang đồng bộ account layer...</span>
         </div>
       </div>
@@ -354,10 +393,10 @@ export default function AccountPage() {
     return (
       <div className="section-shell flex py-24">
         <div className="surface-panel mx-auto max-w-2xl rounded-[2.2rem] px-8 py-10 text-center">
-          <div className="font-display text-[2rem] font-semibold tracking-[-0.04em] text-[var(--foreground-hero)]">
+          <div className="font-display text-[2rem] font-semibold tracking-[-0.04em] text-(--foreground-hero)">
             Đang chuyển sang khu quản trị
           </div>
-          <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+          <p className="mt-3 text-sm leading-7 text-(--muted)">
             Tài khoản quản trị không dùng chung order history, address book và buyer profile với khách mua hàng.
           </p>
           <div className="mt-5 flex justify-center">
@@ -390,9 +429,9 @@ export default function AccountPage() {
                 <Badge variant="secondary">Vai trò: Khách hàng</Badge>
               </div>
             </CardHeader>
-            <CardContent className="flex items-center justify-between gap-4 border-t border-[var(--line)] pt-5">
+            <CardContent className="flex items-center justify-between gap-4 border-t border-(--line) pt-5">
               <BrandMark compact />
-              <div className="max-w-md text-right text-sm leading-7 text-[var(--muted)]">
+              <div className="max-w-md text-right text-sm leading-7 text-(--muted)">
                 Tài khoản không chỉ để đăng nhập. Nó gom order history, wishlist, address book và security về cùng một nơi.
               </div>
             </CardContent>
@@ -402,12 +441,12 @@ export default function AccountPage() {
             <Card className="surface-admin">
               <CardHeader className="pb-2">
                 <CardDescription>Tổng đơn hàng</CardDescription>
-                <CardTitle>{orders.length}</CardTitle>
+                <CardTitle>{orderPagination.totalItems}</CardTitle>
               </CardHeader>
             </Card>
             <Card className="surface-admin">
               <CardHeader className="pb-2">
-                <CardDescription>Đơn đang mở</CardDescription>
+                <CardDescription>Đơn đang mở (trang hiện tại)</CardDescription>
                 <CardTitle>
                   {orders.filter((order) => order.status !== "DELIVERED" && order.status !== "CANCELLED").length}
                 </CardTitle>
@@ -429,7 +468,7 @@ export default function AccountPage() {
         </section>
 
         <Tabs defaultValue="orders">
-          <TabsList className="flex-wrap !h-auto">
+          <TabsList className="flex-wrap h-auto!">
             <TabsTrigger value="orders">
               <Handbag />
               Đơn hàng
@@ -460,8 +499,8 @@ export default function AccountPage() {
               </CardHeader>
               <CardContent>
                 {orders.length === 0 ? (
-                  <div className="surface-panel-muted rounded-[1.5rem] p-6 text-center text-[var(--muted)]">
-                    <Package className="mx-auto mb-3 text-[var(--foreground-dim)]" size={40} />
+                  <div className="surface-panel-muted rounded-3xl p-6 text-center text-(--muted)">
+                    <Package className="mx-auto mb-3 text-(--foreground-dim)" size={40} />
                     Bạn chưa có đơn hàng nào. Hãy mở catalog và đặt đơn đầu tiên.
                     <div className="mt-4">
                       <Button asChild>
@@ -470,38 +509,68 @@ export default function AccountPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Mã đơn</TableHead>
-                          <TableHead>Ngày đặt</TableHead>
-                          <TableHead>Shipping</TableHead>
-                          <TableHead>Trạng thái</TableHead>
-                          <TableHead>Tổng tiền</TableHead>
-                          <TableHead className="text-right">Tác vụ</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {orders.map((order) => (
-                          <TableRow key={order.id}>
-                            <TableCell className="font-medium">{order.orderCode}</TableCell>
-                            <TableCell>{formatDateTime(order.createdAt)}</TableCell>
-                            <TableCell>{order.shippingMethodName ?? "Chưa có"}</TableCell>
-                            <TableCell>
-                              <OrderStatusBadge status={order.status} />
-                            </TableCell>
-                            <TableCell>{formatVnd(order.totalAmount)}</TableCell>
-                            <TableCell className="text-right">
-                              <Button type="button" size="sm" variant="secondary" onClick={() => void openOrderDetail(order.id)}>
-                                <Eye />
-                                Xem
-                              </Button>
-                            </TableCell>
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Mã đơn</TableHead>
+                            <TableHead>Ngày đặt</TableHead>
+                            <TableHead>Shipping</TableHead>
+                            <TableHead>Trạng thái</TableHead>
+                            <TableHead>Tổng tiền</TableHead>
+                            <TableHead className="text-right">Tác vụ</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {orders.map((order) => (
+                            <TableRow key={order.id}>
+                              <TableCell className="font-medium">{order.orderCode}</TableCell>
+                              <TableCell>{formatDateTime(order.createdAt)}</TableCell>
+                              <TableCell>{order.shippingMethodName ?? "Chưa có"}</TableCell>
+                              <TableCell>
+                                <OrderStatusBadge status={order.status} />
+                              </TableCell>
+                              <TableCell>{formatVnd(order.totalAmount)}</TableCell>
+                              <TableCell className="text-right">
+                                <Button type="button" size="sm" variant="secondary" onClick={() => void openOrderDetail(order.id)}>
+                                  <Eye />
+                                  Xem
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="text-sm text-(--muted)">
+                        Trang <span className="font-semibold text-(--foreground-hero)">{orderPagination.page}</span> / {orderPagination.totalPages}
+                        {" "}
+                        • Tổng <span className="font-semibold text-(--foreground-hero)">{orderPagination.totalItems}</span> đơn
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={isOrderPaging || orderPagination.page <= 1}
+                          onClick={() => handleOrderPageChange(orderPagination.page - 1)}
+                        >
+                          Trước
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={isOrderPaging || orderPagination.page >= orderPagination.totalPages}
+                          onClick={() => handleOrderPageChange(orderPagination.page + 1)}
+                        >
+                          Sau
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -516,7 +585,7 @@ export default function AccountPage() {
               </CardHeader>
               <CardContent>
                 {wishlist.length === 0 ? (
-                  <div className="surface-panel-muted rounded-[1.5rem] p-6 text-center text-[var(--muted)]">
+                  <div className="surface-panel-muted rounded-3xl p-6 text-center text-(--muted)">
                     Chưa có sản phẩm nào trong wishlist. Hãy lưu vài đôi nổi bật từ PDP để tạo shortlist.
                   </div>
                 ) : (
@@ -524,10 +593,10 @@ export default function AccountPage() {
                     {wishlist.map((item) => (
                       <div key={item.id} className="surface-panel rounded-[1.8rem] p-5">
                         <div className="space-y-2">
-                          <div className="text-sm text-[var(--muted)]">{item.brand}</div>
-                          <div className="font-display text-2xl font-semibold text-[var(--foreground-hero)]">{item.shoeName}</div>
-                          <div className="text-sm text-[var(--muted)]">{item.silhouette}</div>
-                          <div className="text-sm font-semibold text-[var(--foreground-hero)]">{formatVnd(item.price)}</div>
+                          <div className="text-sm text-(--muted)">{item.brand}</div>
+                          <div className="font-display text-2xl font-semibold text-(--foreground-hero)">{item.shoeName}</div>
+                          <div className="text-sm text-(--muted)">{item.silhouette}</div>
+                          <div className="text-sm font-semibold text-(--foreground-hero)">{formatVnd(item.price)}</div>
                         </div>
                         <div className="mt-5 flex gap-3">
                           <Button asChild size="sm">
@@ -560,14 +629,14 @@ export default function AccountPage() {
                 </CardHeader>
                 <CardContent className="grid gap-4">
                   {addresses.length === 0 ? (
-                    <div className="surface-panel-muted rounded-[1.5rem] p-5 text-sm leading-7 text-[var(--muted)]">
+                    <div className="surface-panel-muted rounded-3xl p-5 text-sm leading-7 text-(--muted)">
                       Chưa có địa chỉ nào được lưu.
                     </div>
                   ) : (
                     addresses.map((address) => (
-                      <div key={address.id} className="rounded-[1.6rem] border border-[var(--line)] bg-white/62 p-4">
+                      <div key={address.id} className="rounded-[1.6rem] border border-(--line) bg-white/62 p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="font-semibold text-[var(--foreground-hero)]">{address.label}</div>
+                          <div className="font-semibold text-(--foreground-hero)">{address.label}</div>
                           <div className="flex items-center gap-2">
                             {address.defaultAddress ? <Badge>Default</Badge> : null}
                             <Button
@@ -581,10 +650,10 @@ export default function AccountPage() {
                             </Button>
                           </div>
                         </div>
-                        <div className="mt-2 text-sm text-[var(--muted)]">
+                        <div className="mt-2 text-sm text-(--muted)">
                           {address.recipientName} • {address.phone}
                         </div>
-                        <div className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                        <div className="mt-1 text-sm leading-6 text-(--muted)">
                           {address.addressLine}, {address.city}
                         </div>
                       </div>
@@ -622,7 +691,7 @@ export default function AccountPage() {
                       <Label htmlFor="addressLine">Địa chỉ</Label>
                       <Input id="addressLine" {...addressForm.register("addressLine")} />
                     </div>
-                    <label className="flex items-center gap-3 text-sm text-[var(--muted)]">
+                    <label className="flex items-center gap-3 text-sm text-(--muted)">
                       <input type="checkbox" {...addressForm.register("defaultAddress")} />
                       Đặt làm địa chỉ mặc định
                     </label>
@@ -703,3 +772,4 @@ export default function AccountPage() {
     </div>
   );
 }
+

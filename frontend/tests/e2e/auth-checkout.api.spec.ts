@@ -27,7 +27,7 @@ type OrderableSelection = {
   sizeLabel: string;
 };
 
-const API_BASE_URL = process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api/v1';
+const API_BASE_URL = process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8080/api/v1';
 
 function createCredentials(): Credentials {
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;

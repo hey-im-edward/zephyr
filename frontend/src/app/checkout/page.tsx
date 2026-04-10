@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   PAYMENT_METHOD_LABELS,
+  confirmMockPayment,
+  createPaymentSession,
   getMyAddresses,
   getPromotions,
   getShippingMethods,
@@ -26,7 +28,7 @@ import {
 } from "@/lib/api";
 import { formatVnd } from "@/lib/currency";
 import { fallbackPromotions, fallbackShippingMethods, isStorefrontDemoFallbackEnabled } from "@/lib/storefront-fallback";
-import type { PaymentMethod, Promotion, ShippingMethod, UserAddress } from "@/lib/types";
+import type { PaymentMethod, PaymentSessionData, Promotion, ShippingMethod, UserAddress } from "@/lib/types";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Vui lòng nhập họ tên."),
@@ -35,13 +37,19 @@ const checkoutSchema = z.object({
   city: z.string().min(2, "Vui lòng nhập tỉnh/thành."),
   addressLine: z.string().min(8, "Vui lòng nhập địa chỉ đầy đủ."),
   notes: z.string().max(500, "Ghi chú quá dài.").optional(),
-  paymentMethod: z.enum(["COD", "BANK_TRANSFER"]),
+  paymentMethod: z.enum(["COD", "BANK_TRANSFER", "CARD", "BANK_QR", "EWALLET"]),
   shippingMethodSlug: z.string().optional(),
   promotionCode: z.string().optional(),
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 type CheckoutDependencyMode = "loading" | "live" | "demo-fallback" | "unavailable";
+
+const ONLINE_PAYMENT_METHODS: PaymentMethod[] = ["CARD", "BANK_QR", "EWALLET"];
+
+function isOnlinePaymentMethod(method: PaymentMethod): boolean {
+  return ONLINE_PAYMENT_METHODS.includes(method);
+}
 
 export default function CheckoutPage() {
   const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart();
@@ -50,6 +58,8 @@ export default function CheckoutPage() {
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [orderCode, setOrderCode] = useState<string | null>(null);
+  const [paymentSession, setPaymentSession] = useState<PaymentSessionData | null>(null);
+  const [isPaymentConfirming, setIsPaymentConfirming] = useState(false);
   const [checkoutDependencyMode, setCheckoutDependencyMode] = useState<CheckoutDependencyMode>("loading");
   const [isPending, startTransition] = useTransition();
   const savedAddresses = isAuthenticated ? addresses : [];
@@ -211,7 +221,24 @@ export default function CheckoutPage() {
           );
 
           setOrderCode(response.orderCode);
+          setPaymentSession(null);
           clearCart();
+
+          if (isOnlinePaymentMethod(values.paymentMethod as PaymentMethod)) {
+            try {
+              const session = await createPaymentSession({ orderCode: response.orderCode });
+              setPaymentSession(session);
+              toast.success("Đơn hàng đã tạo. Tiếp tục hoàn tất thanh toán online.", {
+                description: `Mã đơn ${response.orderCode} đang chờ xác nhận thanh toán.`,
+              });
+            } catch (sessionError) {
+              toast.warning("Đơn hàng đã tạo nhưng chưa khởi tạo được phiên thanh toán online.", {
+                description: sessionError instanceof Error ? sessionError.message : `Mã đơn ${response.orderCode}.`,
+              });
+            }
+            return;
+          }
+
           toast.success("Đặt hàng thành công.", {
             description: `Mã đơn của bạn là ${response.orderCode}.`,
           });
@@ -220,6 +247,28 @@ export default function CheckoutPage() {
         }
       })();
     });
+  }
+
+  async function handleConfirmMockPayment() {
+    if (!paymentSession?.canConfirmMock) {
+      return;
+    }
+
+    setIsPaymentConfirming(true);
+    try {
+      const updatedSession = await confirmMockPayment({
+        orderCode: paymentSession.orderCode,
+        referenceToken: paymentSession.referenceToken,
+      });
+      setPaymentSession(updatedSession);
+      toast.success("Đã xác nhận thanh toán online.", {
+        description: `Đơn ${updatedSession.orderCode} đã chuyển sang trạng thái đã thanh toán.`,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể xác nhận thanh toán.");
+    } finally {
+      setIsPaymentConfirming(false);
+    }
   }
 
   if (isReady && isAuthenticated && isAdmin) {
@@ -577,9 +626,11 @@ export default function CheckoutPage() {
                         {label}
                       </div>
                       <div className="mt-2 text-[var(--muted)]">
-                        {value === "COD"
-                          ? "COD vẫn có chỗ đứng, nhưng được trình bày như một option chính thức chứ không phải note phụ."
-                          : "Chuyển khoản giúp xử lý gọn hơn khi fulfillment và đối soát được nối chặt."}
+                        {value === "COD" && "COD vẫn có chỗ đứng, nhưng được trình bày như một option chính thức chứ không phải note phụ."}
+                        {value === "BANK_TRANSFER" && "Chuyển khoản thủ công phù hợp khi đối soát theo batch với fulfillment."}
+                        {value === "CARD" && "Thanh toán thẻ online qua phiên checkout bảo mật, phù hợp luồng mua nhanh."}
+                        {value === "BANK_QR" && "Quét QR ngân hàng để chuyển khoản tức thì với nội dung đối soát tự động."}
+                        {value === "EWALLET" && "Thanh toán qua ví điện tử, giữ trải nghiệm mobile-first cho khách hàng."}
                       </div>
                     </label>
                   ))}
@@ -596,6 +647,68 @@ export default function CheckoutPage() {
               {orderCode ? (
                 <div className="rounded-[1.5rem] border border-emerald-300/40 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                   Đơn hàng đã được tạo thành công. Mã đơn: <strong>{orderCode}</strong>.
+                </div>
+              ) : null}
+
+              {paymentSession ? (
+                <div className="rounded-[1.5rem] border border-[var(--line)] bg-white/72 px-4 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Phiên thanh toán online</div>
+                      <div className="mt-1 font-semibold text-[var(--foreground-hero)]">
+                        {PAYMENT_METHOD_LABELS[paymentSession.method]} • {formatVnd(paymentSession.amount)}
+                      </div>
+                    </div>
+                    <Badge variant={paymentSession.status === "PAID" ? "success" : "warning"}>
+                      {paymentSession.status === "PAID" ? "Đã thanh toán" : "Đang chờ thanh toán"}
+                    </Badge>
+                  </div>
+
+                  {paymentSession.instruction ? (
+                    <div className="mt-3 text-sm leading-7 text-[var(--muted)]">{paymentSession.instruction}</div>
+                  ) : null}
+
+                  {paymentSession.qrImageUrl ? (
+                    <div className="mt-4">
+                      <Image
+                        src={paymentSession.qrImageUrl}
+                        alt="Mã QR thanh toán"
+                        width={220}
+                        height={220}
+                        className="rounded-2xl border border-[var(--line)] bg-white p-2"
+                      />
+                    </div>
+                  ) : null}
+
+                  {paymentSession.qrPayload ? (
+                    <div className="mt-3 rounded-xl border border-[var(--line)] bg-white/70 px-3 py-2 text-xs text-[var(--foreground-dim)]">
+                      Nội dung chuyển khoản: {paymentSession.qrPayload}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {paymentSession.checkoutUrl ? (
+                      <Button asChild type="button" variant="secondary" size="sm">
+                        <a href={paymentSession.checkoutUrl} target="_blank" rel="noreferrer">
+                          Mở trang thanh toán
+                        </a>
+                      </Button>
+                    ) : null}
+
+                    {paymentSession.walletDeepLink ? (
+                      <Button asChild type="button" variant="secondary" size="sm">
+                        <a href={paymentSession.walletDeepLink} target="_blank" rel="noreferrer">
+                          Mở ứng dụng ví
+                        </a>
+                      </Button>
+                    ) : null}
+
+                    {paymentSession.canConfirmMock ? (
+                      <Button type="button" size="sm" disabled={isPaymentConfirming} onClick={() => void handleConfirmMockPayment()}>
+                        {isPaymentConfirming ? "Đang xác nhận..." : "Tôi đã thanh toán"}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 

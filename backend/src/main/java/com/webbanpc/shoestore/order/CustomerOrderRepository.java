@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -11,14 +13,16 @@ import org.springframework.data.repository.query.Param;
 
 public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Long> {
 
+  Optional<CustomerOrder> findByOrderCode(String orderCode);
+
     @EntityGraph(attributePaths = { "items", "user" })
     Optional<CustomerOrder> findWithItemsById(Long id);
 
     @EntityGraph(attributePaths = { "items", "user" })
     List<CustomerOrder> findAllByOrderByCreatedAtDesc();
 
-    @EntityGraph(attributePaths = { "items", "user" })
-    List<CustomerOrder> findAllByUserIdOrderByCreatedAtDesc(Long userId);
+    @EntityGraph(attributePaths = { "shippingMethod", "promotion" })
+    Page<CustomerOrder> findAllByUserId(Long userId, Pageable pageable);
 
     @EntityGraph(attributePaths = { "shippingMethod", "promotion" })
     @Query("""
@@ -31,9 +35,8 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
                 or lower(o.customerName) like concat('%', lower(:query), '%')
                 or lower(o.email) like concat('%', lower(:query), '%')
               )
-            order by o.createdAt desc, o.id desc
             """)
-    List<CustomerOrder> findAllForAdmin(@Param("status") OrderStatus status, @Param("query") String query);
+    Page<CustomerOrder> findAllForAdmin(@Param("status") OrderStatus status, @Param("query") String query, Pageable pageable);
 
     long countByStatus(OrderStatus status);
 

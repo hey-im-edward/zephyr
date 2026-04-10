@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     "build/**",
     "storybook-static/**",
     "next-env.d.ts",
+    // Local generated assets and one-off scripts are outside app source quality gates.
+    "output/**",
+    "patch.js",
   ]),
   ...storybook.configs["flat/recommended"]
 ]);

@@ -1,6 +1,7 @@
 package com.webbanpc.shoestore.auth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,10 @@ class RefreshTokenCookieServiceTests {
     private final RefreshTokenCookieService cookieService =
             new RefreshTokenCookieService(
                     new RefreshCookieProperties("zephyr_refresh_token", "/api/v1/auth", false, "Lax", null));
+
+    private final RefreshTokenCookieService cookieServiceWithDomain =
+            new RefreshTokenCookieService(
+                    new RefreshCookieProperties("zephyr_refresh_token", "/api/v1/auth", true, "Lax", "zephyr.vn"));
 
     @Test
     void shouldResolveRefreshTokenFromCookieBeforeFallbackToken() {
@@ -53,10 +58,23 @@ class RefreshTokenCookieServiceTests {
         cookieService.addRefreshTokenCookie(response, "refresh-token", LocalDateTime.now().plusDays(7));
 
         String header = response.getHeader("Set-Cookie");
+        assertNotNull(header);
         assertTrue(header.contains("zephyr_refresh_token=refresh-token"));
         assertTrue(header.contains("HttpOnly"));
         assertTrue(header.contains("SameSite=Lax"));
         assertTrue(header.contains("Path=/api/v1/auth"));
+    }
+
+    @Test
+    void shouldWriteRefreshCookieWithConfiguredDomain() {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        cookieServiceWithDomain.addRefreshTokenCookie(response, "refresh-token", LocalDateTime.now().plusDays(7));
+
+        String header = response.getHeader("Set-Cookie");
+        assertNotNull(header);
+        assertTrue(header.contains("Domain=zephyr.vn"));
+        assertTrue(header.contains("Secure"));
     }
 
     @Test
@@ -66,7 +84,20 @@ class RefreshTokenCookieServiceTests {
         cookieService.clearRefreshTokenCookie(response);
 
         String header = response.getHeader("Set-Cookie");
+        assertNotNull(header);
         assertTrue(header.contains("zephyr_refresh_token="));
+        assertTrue(header.contains("Max-Age=0"));
+    }
+
+    @Test
+    void shouldClearRefreshCookieWithConfiguredDomain() {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        cookieServiceWithDomain.clearRefreshTokenCookie(response);
+
+        String header = response.getHeader("Set-Cookie");
+        assertNotNull(header);
+        assertTrue(header.contains("Domain=zephyr.vn"));
         assertTrue(header.contains("Max-Age=0"));
     }
 }

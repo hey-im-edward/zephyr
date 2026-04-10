@@ -8,12 +8,16 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.webbanpc.shoestore.common.BadRequestException;
 import com.webbanpc.shoestore.common.ResourceNotFoundException;
+import com.webbanpc.shoestore.payment.PaymentService;
 import com.webbanpc.shoestore.promotion.Promotion;
 import com.webbanpc.shoestore.promotion.PromotionService;
 import com.webbanpc.shoestore.shoe.Shoe;
@@ -29,12 +33,15 @@ import com.webbanpc.shoestore.user.UserRole;
 @Transactional(readOnly = true)
 public class OrderService {
 
+    private static final int MAX_ORDER_PAGE_SIZE = 50;
+
     private final CustomerOrderRepository customerOrderRepository;
     private final ShoeRepository shoeRepository;
     private final ShoeSizeStockRepository shoeSizeStockRepository;
     private final ShippingMethodService shippingMethodService;
     private final PromotionService promotionService;
     private final OrderStatusHistoryRepository orderStatusHistoryRepository;
+    private final PaymentService paymentService;
 
     public OrderService(
             CustomerOrderRepository customerOrderRepository,
@@ -42,13 +49,15 @@ public class OrderService {
             ShoeSizeStockRepository shoeSizeStockRepository,
             ShippingMethodService shippingMethodService,
             PromotionService promotionService,
-            OrderStatusHistoryRepository orderStatusHistoryRepository) {
+            OrderStatusHistoryRepository orderStatusHistoryRepository,
+            PaymentService paymentService) {
         this.customerOrderRepository = customerOrderRepository;
         this.shoeRepository = shoeRepository;
         this.shoeSizeStockRepository = shoeSizeStockRepository;
         this.shippingMethodService = shippingMethodService;
         this.promotionService = promotionService;
         this.orderStatusHistoryRepository = orderStatusHistoryRepository;
+        this.paymentService = paymentService;
     }
 
     @Transactional
@@ -125,11 +134,14 @@ public class OrderService {
         return toResponse(savedOrder);
     }
 
-    public List<OrderResponse> listForUser(UserAccount user) {
-        return customerOrderRepository.findAllByUserIdOrderByCreatedAtDesc(user.getId())
-                .stream()
-                .map(this::toResponse)
-                .toList();
+    public OrderListResponse listForUser(UserAccount user, int page, int pageSize) {
+        int safePage = Math.max(page, 1);
+        int safePageSize = Math.min(Math.max(pageSize, 1), MAX_ORDER_PAGE_SIZE);
+        Page<CustomerOrder> orderPage = customerOrderRepository.findAllByUserId(
+                user.getId(),
+                PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
+
+        return toListResponse(orderPage, safePage, safePageSize);
     }
 
     public OrderDetailResponse getForUser(UserAccount user, Long id) {
@@ -143,16 +155,20 @@ public class OrderService {
         return toDetailResponse(order);
     }
 
-    public List<OrderResponse> listForAdmin(OrderStatus status, String query) {
+    public OrderListResponse listForAdmin(OrderStatus status, String query, int page, int pageSize) {
+        int safePage = Math.max(page, 1);
+        int safePageSize = Math.min(Math.max(pageSize, 1), MAX_ORDER_PAGE_SIZE);
         String normalizedQuery = query == null ? null : query.trim();
         if (normalizedQuery != null && normalizedQuery.isBlank()) {
             normalizedQuery = null;
         }
 
-        return customerOrderRepository.findAllForAdmin(status, normalizedQuery)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+        Page<CustomerOrder> orderPage = customerOrderRepository.findAllForAdmin(
+                status,
+                normalizedQuery,
+                PageRequest.of(safePage - 1, safePageSize, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
+
+        return toListResponse(orderPage, safePage, safePageSize);
     }
 
     public OrderDetailResponse getForAdmin(Long id) {
@@ -164,6 +180,10 @@ public class OrderService {
     public OrderDetailResponse updateStatus(Long id, OrderStatus nextStatus) {
         CustomerOrder order = customerOrderRepository.findWithItemsById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
+
+        if (requiresPaymentSettlement(nextStatus) && !paymentService.isOrderPaymentSettled(order)) {
+            throw new BadRequestException("Online payment has not been confirmed for this order.");
+        }
 
         OrderStatus previousStatus = order.getStatus();
         if (previousStatus == nextStatus) {
@@ -239,6 +259,23 @@ public class OrderService {
     private Comparator<OrderItem> orderItemComparator() {
         return Comparator.comparing(OrderItem::getShoeSlug)
                 .thenComparing(OrderItem::getSizeLabel, String.CASE_INSENSITIVE_ORDER);
+    }
+
+    private boolean requiresPaymentSettlement(OrderStatus status) {
+        return status == OrderStatus.CONFIRMED
+                || status == OrderStatus.PACKING
+                || status == OrderStatus.SHIPPING
+                || status == OrderStatus.DELIVERED;
+    }
+
+    private OrderListResponse toListResponse(Page<CustomerOrder> orderPage, int page, int pageSize) {
+        return new OrderListResponse(
+                orderPage.getContent().stream().map(this::toResponse).toList(),
+                new OrderListResponse.OrderPagination(
+                        page,
+                        pageSize,
+                        orderPage.getTotalElements(),
+                        Math.max(1, orderPage.getTotalPages())));
     }
 
     private OrderResponse toResponse(CustomerOrder order) {

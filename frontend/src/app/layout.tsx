@@ -3,6 +3,7 @@ import { Inter, Sora } from "next/font/google";
 
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
+import { ChatbotWidget } from "@/components/chatbot-widget";
 import { CartProvider } from "@/components/cart-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -45,6 +46,7 @@ export default function RootLayout({
               <main className="flex-1">{children}</main>
               <SiteFooter />
             </div>
+            <ChatbotWidget />
             <AppToaster />
           </CartProvider>
         </AuthProvider>

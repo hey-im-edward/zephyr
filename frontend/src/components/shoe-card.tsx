@@ -9,19 +9,21 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatVnd } from "@/lib/currency";
+import { toSafeImageUrl } from "@/lib/image-safety";
 import type { ShoeCard as ShoeCardType } from "@/lib/types";
 
 export function ShoeCard({ shoe }: { shoe: ShoeCardType }) {
   const hydrated = useHydrated();
   const averageRating = shoe.averageRating ?? 0;
   const reviewCount = shoe.reviewCount ?? 0;
+  const safePrimaryImage = toSafeImageUrl(shoe.primaryImage);
 
   const content = (
     <div className="flex h-full flex-col p-3">
       <Link href={`/shoes/${shoe.slug}`} className="block">
         <div className="relative overflow-hidden rounded-[1.7rem]">
           <Image
-            src={shoe.primaryImage}
+            src={safePrimaryImage}
             alt={shoe.name}
             width={900}
             height={900}

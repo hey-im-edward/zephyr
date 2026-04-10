@@ -1,0 +1,21 @@
+CREATE TABLE payment_transactions (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    provider VARCHAR(40) NOT NULL,
+    channel VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+    reference_token VARCHAR(80) NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    checkout_url VARCHAR(255) NULL,
+    qr_image_url VARCHAR(255) NULL,
+    qr_payload TEXT NULL,
+    wallet_deep_link VARCHAR(255) NULL,
+    instruction VARCHAR(255) NULL,
+    expires_at DATETIME NULL,
+    paid_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    CONSTRAINT fk_payment_transactions_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT uk_payment_transactions_order UNIQUE (order_id),
+    CONSTRAINT uk_payment_transactions_reference UNIQUE (reference_token)
+);

@@ -9,6 +9,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import com.webbanpc.shoestore.user.UserAccount;
 import com.webbanpc.shoestore.user.UserRepository;
@@ -27,6 +29,7 @@ class CustomerOrderRepositoryAdminSearchTests {
     @Test
     void shouldFilterAndSortOrdersInDatabaseForAdminSearch() {
         String token = Long.toString(System.nanoTime(), 36);
+        PageRequest firstPage = PageRequest.of(0, 20, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
 
         UserAccount user = userRepository.saveAndFlush(UserAccount.builder()
                 .fullName("Admin Search Buyer")
@@ -45,11 +48,11 @@ class CustomerOrderRepositoryAdminSearchTests {
         CustomerOrder deliveredMatch = saveOrder(user, "SH-" + token + "-C", "Alice Delivered " + token, "alice-delivered-" + token + "@zephyr.test", OrderStatus.DELIVERED,
                 LocalDateTime.now().minusHours(1));
 
-        List<CustomerOrder> allOrders = customerOrderRepository.findAllForAdmin(null, token);
+        List<CustomerOrder> allOrders = customerOrderRepository.findAllForAdmin(null, token, firstPage).getContent();
         assertEquals(List.of(deliveredMatch.getId(), newerPending.getId(), olderPending.getId()),
                 allOrders.stream().map(CustomerOrder::getId).toList());
 
-        List<CustomerOrder> filteredOrders = customerOrderRepository.findAllForAdmin(OrderStatus.PENDING, token);
+        List<CustomerOrder> filteredOrders = customerOrderRepository.findAllForAdmin(OrderStatus.PENDING, token, firstPage).getContent();
         assertEquals(List.of(newerPending.getId(), olderPending.getId()),
                 filteredOrders.stream().map(CustomerOrder::getId).toList());
     }
@@ -57,6 +60,7 @@ class CustomerOrderRepositoryAdminSearchTests {
     @Test
     void shouldUseIdAsStableTieBreakerWhenCreatedAtMatches() {
         String token = Long.toString(System.nanoTime(), 36);
+        PageRequest firstPage = PageRequest.of(0, 20, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
 
         UserAccount user = userRepository.saveAndFlush(UserAccount.builder()
                 .fullName("Admin Search Tie Breaker")
@@ -74,7 +78,7 @@ class CustomerOrderRepositoryAdminSearchTests {
         CustomerOrder secondSaved = saveOrder(user, "SH-TIE-" + token + "-2", "Tie Breaker Two " + token, "tie-two-" + token + "@zephyr.test", OrderStatus.CONFIRMED,
                 sameCreatedAt);
 
-        List<CustomerOrder> filteredOrders = customerOrderRepository.findAllForAdmin(OrderStatus.CONFIRMED, token);
+        List<CustomerOrder> filteredOrders = customerOrderRepository.findAllForAdmin(OrderStatus.CONFIRMED, token, firstPage).getContent();
         assertEquals(List.of(secondSaved.getId(), firstSaved.getId()),
                 filteredOrders.stream().map(CustomerOrder::getId).toList());
     }

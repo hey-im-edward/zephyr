@@ -34,6 +34,11 @@ public class ApiExceptionHandler {
         return buildProblem(HttpStatus.BAD_REQUEST, "Invalid request", exception.getMessage());
     }
 
+    @ExceptionHandler(TooManyRequestsException.class)
+    ProblemDetail handleTooManyRequests(TooManyRequestsException exception) {
+        return buildProblem(HttpStatus.TOO_MANY_REQUESTS, "Too many requests", exception.getMessage());
+    }
+
     @ExceptionHandler(UnauthorizedException.class)
     ProblemDetail handleUnauthorized(UnauthorizedException exception) {
         return buildProblem(HttpStatus.UNAUTHORIZED, "Unauthorized", exception.getMessage());

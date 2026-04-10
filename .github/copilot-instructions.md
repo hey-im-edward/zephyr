@@ -79,3 +79,30 @@
 ## PR Completion Checklist Rule
 - The agent must provide a concise completion summary covering: what changed, why, risks, validation executed, and any follow-up.
 - The agent must explicitly mention unverified assumptions or validation gaps if any step could not be completed.
+
+## GitNexus Code Intelligence (MCP)
+
+This project is indexed by GitNexus (1904 nodes, 5237 edges, 109 clusters, 146 execution flows). The GitNexus MCP server is configured in `.vscode/mcp.json` and provides deep codebase intelligence tools.
+
+### Always Do
+- **Before editing any function, class, or method**: run `gitnexus_impact` to check blast radius and risk level. Report HIGH/CRITICAL risks before proceeding.
+- **Before committing**: run `gitnexus_detect_changes` to verify changes only affect expected symbols and flows.
+- **When exploring unfamiliar code**: use `gitnexus_query` to find execution flows instead of plain text search.
+- **When needing full context on a symbol**: use `gitnexus_context` to see all callers, callees, and process participation.
+- **When renaming symbols**: use `gitnexus_rename` with `dry_run: true` first, then apply.
+
+### Tools Quick Reference
+| Tool | When to use |
+|------|-------------|
+| `gitnexus_query({query: "..."})` | Find code by concept or keyword |
+| `gitnexus_context({name: "symbolName"})` | 360-degree view of a symbol |
+| `gitnexus_impact({target: "symbolName", direction: "upstream"})` | Blast radius before editing |
+| `gitnexus_detect_changes({scope: "staged"})` | Pre-commit scope check |
+| `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` | Safe multi-file rename |
+| `gitnexus_cypher({query: "MATCH ..."})` | Custom graph queries |
+
+### Never Do
+- Never edit a function/class without running `gitnexus_impact` first.
+- Never ignore HIGH or CRITICAL risk warnings.
+- Never rename symbols with find-and-replace — use `gitnexus_rename`.
+- Never commit without running `gitnexus_detect_changes`.

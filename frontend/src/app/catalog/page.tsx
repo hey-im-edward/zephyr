@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getCatalog } from "@/lib/api";
 import { formatVnd } from "@/lib/currency";
+import { toSafeImageUrl } from "@/lib/image-safety";
 import { getFallbackCatalog, resolveStorefrontData } from "@/lib/storefront-fallback";
 
 type CatalogPageProps = {
@@ -118,6 +119,11 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
 
   const catalog = catalogResult.data;
   const isDemoFallback = catalogResult.mode === "demo-fallback";
+  const safeHeroImage = toSafeImageUrl(
+    catalog.heroCampaign?.backgroundImage ?? catalog.featuredCollections[0]?.coverImage,
+    fallbackCatalogBackground,
+  );
+  const safeCollectionCover = toSafeImageUrl(catalog.featuredCollections[0]?.coverImage, fallbackCatalogBackground);
 
   const activeFilters = [
     params.category,
@@ -192,11 +198,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                 <div className="min-w-0 grid gap-4">
                   <div className="surface-panel relative min-h-[18rem] overflow-hidden rounded-[2.3rem]">
                     <Image
-                    src={
-                      catalog.heroCampaign?.backgroundImage ??
-                      catalog.featuredCollections[0]?.coverImage ??
-                      fallbackCatalogBackground
-                    }
+                    src={safeHeroImage}
                     alt={catalog.heroCampaign?.title ?? "ZEPHYR catalog"}
                     fill
                     priority
@@ -346,7 +348,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
                 <div className="grid gap-4 md:grid-cols-[0.92fr_1.08fr]">
                   <div className="relative min-h-[14rem] overflow-hidden rounded-[1.6rem]">
                     <Image
-                      src={catalog.featuredCollections[0].coverImage}
+                      src={safeCollectionCover}
                       alt={catalog.featuredCollections[0].name}
                       fill
                       sizes="(max-width: 768px) 100vw, 36vw"

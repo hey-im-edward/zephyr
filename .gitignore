@@ -21,3 +21,4 @@ backend/target/
 .env
 backend/.env
 frontend/.env
+.gitnexus

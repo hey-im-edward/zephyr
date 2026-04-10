@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.webbanpc.shoestore.category.Category;
 import com.webbanpc.shoestore.category.CategoryRepository;
@@ -19,6 +20,7 @@ import com.webbanpc.shoestore.user.UserRepository;
 import com.webbanpc.shoestore.user.UserRole;
 
 @SpringBootTest
+@Transactional
 @SuppressWarnings("null")
 class CustomerOrderRepositoryReviewEligibilityTests {
 
@@ -83,8 +85,8 @@ class CustomerOrderRepositoryReviewEligibilityTests {
                 .shortDescription("Eligibility test shoe")
                 .description("Eligibility test shoe description")
                 .price(new BigDecimal("2500000"))
-                .primaryImage("https://example.com/primary.jpg")
-                .secondaryImage("https://example.com/secondary.jpg")
+                .primaryImage("https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80")
+                .secondaryImage("https://images.unsplash.com/photo-1460353581641-37baddab0fa2?auto=format&fit=crop&w=1200&q=80")
                 .availableSizes("42")
                 .accentColors("black")
                 .highlights("test")

@@ -10,7 +10,13 @@ export type OrderStatus =
 
 export type ReviewStatus = "PUBLISHED" | "PENDING" | "HIDDEN";
 
-export type PaymentMethod = "COD" | "BANK_TRANSFER";
+export type PaymentMethod = "COD" | "BANK_TRANSFER" | "CARD" | "BANK_QR" | "EWALLET";
+
+export type PaymentStatus = "PENDING_ACTION" | "PAID" | "FAILED" | "EXPIRED" | "CANCELLED";
+
+export type PaymentProvider = "MOCK" | "VIETQR";
+
+export type PaymentChannel = "CARD" | "BANK_QR" | "EWALLET";
 
 export type Category = {
   id: number;
@@ -268,6 +274,62 @@ export type OrderResponse = {
   discountAmount: number;
   deliveryWindow?: string | null;
   createdAt: string;
+};
+
+export type OrderPagination = {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+export type OrderListData = {
+  items: OrderResponse[];
+  pagination: OrderPagination;
+};
+
+export type PaymentSessionRequest = {
+  orderCode: string;
+};
+
+export type PaymentConfirmRequest = {
+  orderCode: string;
+  referenceToken: string;
+};
+
+export type PaymentSessionData = {
+  orderCode: string;
+  method: PaymentMethod;
+  provider: PaymentProvider;
+  channel: PaymentChannel;
+  status: PaymentStatus;
+  amount: number;
+  referenceToken: string;
+  checkoutUrl?: string | null;
+  qrImageUrl?: string | null;
+  qrPayload?: string | null;
+  walletDeepLink?: string | null;
+  instruction?: string | null;
+  expiresAt?: string | null;
+  paidAt?: string | null;
+  canConfirmMock: boolean;
+};
+
+export type ChatbotMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatbotCompletionRequest = {
+  message: string;
+  history?: ChatbotMessage[];
+};
+
+export type ChatbotCompletionResponse = {
+  answer: string;
+  provider: string;
+  model: string;
+  requestId?: string | null;
 };
 
 export type OrderItem = {

@@ -70,6 +70,7 @@ import type {
   Category,
   CategoryInput,
   OrderDetail,
+  OrderPagination,
   OrderResponse,
   OrderStatus,
   Promotion,
@@ -81,6 +82,8 @@ import type {
   ShoeDetail,
   ShoeInput,
 } from "@/lib/types";
+
+const ADMIN_ORDER_PAGE_SIZE = 20;
 
 const emptyCampaignDraft: CampaignInput = {
   title: "",
@@ -134,9 +137,21 @@ function CheckboxField({
   label: string;
 }) {
   return (
-    <label className="inline-flex items-center gap-3 text-sm text-[var(--muted)]">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      {label}
+    <label className="group relative flex cursor-pointer items-center gap-3 select-none">
+      <div className="relative flex h-5 w-5 items-center justify-center rounded-md border border-(--line-strong) bg-white/50 transition-colors group-hover:border-brand aria-checked:border-brand aria-checked:bg-brand" aria-checked={checked}>
+        <input 
+          type="checkbox" 
+          checked={checked} 
+          onChange={(event) => onChange(event.target.checked)} 
+          className="peer absolute inset-0 cursor-pointer opacity-0"
+        />
+        {checked && (
+          <svg className="pointer-events-none absolute h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        )}
+      </div>
+      <span className="text-sm font-medium text-(--foreground-dim) transition-colors group-hover:text-(--foreground-hero)">{label}</span>
     </label>
   );
 }
@@ -147,6 +162,12 @@ export default function AdminPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [shoes, setShoes] = useState<ShoeDetail[]>([]);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
+  const [orderPagination, setOrderPagination] = useState<OrderPagination>({
+    page: 1,
+    pageSize: ADMIN_ORDER_PAGE_SIZE,
+    totalItems: 0,
+    totalPages: 1,
+  });
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
@@ -183,7 +204,7 @@ export default function AdminPage() {
     return token;
   }, [getAccessToken]);
 
-  const loadWorkspace = useCallback(async (status = orderStatusFilter, query = orderQuery) => {
+  const loadWorkspace = useCallback(async (status = orderStatusFilter, query = orderQuery, page = 1) => {
     const token = await fetchToken();
     const [
       dashboardData,
@@ -203,7 +224,12 @@ export default function AdminPage() {
       getAdminDashboard(token),
       getAdminCategories(token),
       getAdminShoes(token),
-      listAdminOrders(token, status || undefined, query || undefined),
+      listAdminOrders(token, {
+        status: status || undefined,
+        query: query || undefined,
+        page,
+        pageSize: ADMIN_ORDER_PAGE_SIZE,
+      }),
       getAdminCampaigns(token),
       getAdminBannerSlots(token),
       getAdminCollections(token),
@@ -218,7 +244,8 @@ export default function AdminPage() {
     setDashboard(dashboardData);
     setCategories(categoryData);
     setShoes(shoeData);
-    setOrders(orderData);
+    setOrders(orderData.items);
+    setOrderPagination(orderData.pagination);
     setCampaigns(campaignData);
     setPromotions(promotionData);
     setShippingMethods(shippingData);
@@ -231,7 +258,7 @@ export default function AdminPage() {
   }, [fetchToken, orderQuery, orderStatusFilter]);
 
   useEffect(() => {
-    if (!isReady || !isAuthenticated || !isAdmin) return;
+    if (!isReady || !isAuthenticated || !isAdmin || hasLoadedWorkspace) return;
     let active = true;
 
     startTransition(() => {
@@ -248,11 +275,11 @@ export default function AdminPage() {
     return () => {
       active = false;
     };
-  }, [isAdmin, isAuthenticated, isReady, loadWorkspace, startTransition]);
+  }, [isAdmin, isAuthenticated, isReady, loadWorkspace, startTransition, hasLoadedWorkspace]);
 
-  async function refreshWorkspace(message = "Đã đồng bộ dữ liệu quản trị.") {
+  async function refreshWorkspace(message = "Đã đồng bộ dữ liệu quản trị.", page = orderPagination.page) {
     try {
-      await loadWorkspace();
+      await loadWorkspace(orderStatusFilter, orderQuery, page);
       toast.success(message);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Không thể đồng bộ dữ liệu.");
@@ -329,7 +356,19 @@ export default function AdminPage() {
 
   function handleFilterOrders() {
     startTransition(() => {
-      void refreshWorkspace("Đã lọc danh sách đơn.");
+      void refreshWorkspace("Đã lọc danh sách đơn.", 1);
+    });
+  }
+
+  function handleOrderPageChange(nextPage: number) {
+    if (nextPage < 1 || nextPage > orderPagination.totalPages || nextPage === orderPagination.page) {
+      return;
+    }
+
+    startTransition(() => {
+      void loadWorkspace(orderStatusFilter, orderQuery, nextPage).catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Không thể tải trang đơn hàng.");
+      });
     });
   }
 
@@ -432,11 +471,11 @@ export default function AdminPage() {
     <div className="mx-auto max-w-7xl px-6 py-12">
       <div className="mb-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <MotionReveal className="surface-strong rounded-[2.4rem] p-7">
-          <Badge variant="secondary" className="border-[var(--line)] bg-white/62">ZEPHYR operations</Badge>
-          <h1 className="mt-4 max-w-3xl font-display text-5xl font-semibold leading-none text-[var(--foreground-hero)]">
+          <Badge variant="secondary" className="border-(--line) bg-white/62">ZEPHYR operations</Badge>
+          <h1 className="mt-4 max-w-3xl font-display text-5xl font-semibold leading-none text-(--foreground-hero)">
             Điều khiển storefront, merchandising và vận hành từ cùng một shell.
           </h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--muted)]">
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-(--muted)">
             Admin mới gom catalog, operations, merchandising và governance vào cùng một lớp vận hành sáng, đọc rõ và tiết chế blur.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -465,12 +504,12 @@ export default function AdminPage() {
       <div className="mb-8 grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
         <MotionReveal className="surface-admin rounded-[1.8rem] p-5">
           <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-[var(--line)] bg-white/74 text-[var(--foreground-hero)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-(--line) bg-white/74 text-(--foreground-hero)">
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="space-y-3">
-              <div className="font-display text-2xl font-semibold text-[var(--foreground-hero)]">Nhịp ưu tiên của ca vận hành</div>
-              <p className="text-sm leading-7 text-[var(--muted)]">
+              <div className="font-display text-2xl font-semibold text-(--foreground-hero)">Nhịp ưu tiên của ca vận hành</div>
+              <p className="text-sm leading-7 text-(--muted)">
                 Xử lý đơn treo trước, giữ promotion và shipping methods luôn đúng, sau đó mới tinh chỉnh campaign và surface merchandising.
               </p>
             </div>
@@ -479,12 +518,12 @@ export default function AdminPage() {
 
         <MotionReveal delay={0.08} className="rounded-[1.8rem] border border-[rgba(220,87,109,0.16)] bg-[rgba(220,87,109,0.06)] p-5">
           <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-[rgba(220,87,109,0.2)] bg-white/62 text-[var(--danger)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[rgba(220,87,109,0.2)] bg-white/62 text-(--danger)">
               <AlertTriangle className="h-5 w-5" />
             </div>
             <div className="space-y-3">
-              <div className="font-display text-2xl font-semibold text-[var(--foreground-hero)]">Vùng thao tác nhạy cảm</div>
-              <p className="text-sm leading-7 text-[var(--muted)]">
+              <div className="font-display text-2xl font-semibold text-(--foreground-hero)">Vùng thao tác nhạy cảm</div>
+              <p className="text-sm leading-7 text-(--muted)">
                 Trạng thái đơn, review moderation và governance actions phải ưu tiên độ rõ hơn hiệu ứng thị giác.
               </p>
             </div>
@@ -493,7 +532,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList className="flex-wrap !h-auto">
+        <TabsList className="flex-wrap h-auto!">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="catalog">Catalog</TabsTrigger>
           <TabsTrigger value="operations">Operations</TabsTrigger>
@@ -508,13 +547,13 @@ export default function AdminPage() {
               <AdminPanel>
                 <AdminPanelHeader title="Campaigns live" description="Hero campaign và slots đang chạy." />
                 <AdminPanelBody className="space-y-3">
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Campaigns</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{campaigns.length}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Campaigns</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{campaigns.length}</div>
                   </div>
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Banner slots</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{bannerCount}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Banner slots</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{bannerCount}</div>
                   </div>
                 </AdminPanelBody>
               </AdminPanel>
@@ -522,13 +561,13 @@ export default function AdminPage() {
               <AdminPanel>
                 <AdminPanelHeader title="Merchandising assets" description="Collections và media hiện có trong hệ." />
                 <AdminPanelBody className="space-y-3">
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Collections</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{collectionCount}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Collections</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{collectionCount}</div>
                   </div>
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Media assets</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{mediaAssetCount}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Media assets</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{mediaAssetCount}</div>
                   </div>
                 </AdminPanelBody>
               </AdminPanel>
@@ -536,13 +575,13 @@ export default function AdminPage() {
               <AdminPanel>
                 <AdminPanelHeader title="Governance" description="Review moderation, admin roles và audit." />
                 <AdminPanelBody className="space-y-3">
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Reviews</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{reviews.length}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Reviews</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{reviews.length}</div>
                   </div>
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Admin roles</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{adminRoles.length}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Admin roles</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{adminRoles.length}</div>
                   </div>
                 </AdminPanelBody>
               </AdminPanel>
@@ -574,11 +613,14 @@ export default function AdminPage() {
               orders={orders}
               orderQuery={orderQuery}
               orderStatusFilter={orderStatusFilter}
+              orderPagination={orderPagination}
               isPending={isPending}
               onOrderQueryChange={setOrderQuery}
               onOrderStatusFilterChange={setOrderStatusFilter}
               onFilter={handleFilterOrders}
               onOpenDetail={(orderId) => void openOrderDetail(orderId)}
+              onPreviousPage={() => handleOrderPageChange(orderPagination.page - 1)}
+              onNextPage={() => handleOrderPageChange(orderPagination.page + 1)}
             />
 
             <div className="grid gap-5 xl:grid-cols-[0.92fr_1.08fr]">
@@ -625,11 +667,11 @@ export default function AdminPage() {
                 <AdminPanelHeader title="Review moderation" description="Kiểm soát review trước khi lên PDP." />
                 <AdminPanelBody className="grid gap-3">
                   {reviews.map((review) => (
-                    <div key={review.id} className="rounded-[1.5rem] border border-[var(--line)] bg-white/56 p-4">
+                    <div key={review.id} className="rounded-3xl border border-(--line) bg-white/56 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <div className="font-semibold text-[var(--foreground-hero)]">{review.title}</div>
-                          <div className="mt-1 text-sm text-[var(--muted)]">
+                          <div className="font-semibold text-(--foreground-hero)">{review.title}</div>
+                          <div className="mt-1 text-sm text-(--muted)">
                             {review.customerName} • {review.rating}/5
                           </div>
                         </div>
@@ -637,7 +679,7 @@ export default function AdminPage() {
                           {review.status}
                         </Badge>
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{review.body}</p>
+                      <p className="mt-3 text-sm leading-6 text-(--muted)">{review.body}</p>
                       <div className="mt-4 flex flex-wrap gap-2">
                         {(["PUBLISHED", "PENDING", "HIDDEN"] as ReviewStatus[]).map((status) => (
                           <Button
@@ -673,21 +715,21 @@ export default function AdminPage() {
               <AdminPanelHeader title="Shipping roster" description="Danh sách phương thức đang hiển thị ra storefront và checkout." />
               <AdminPanelBody className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {shippingMethods.length === 0 ? (
-                  <div className="rounded-[1.5rem] border border-[var(--line)] bg-white/56 p-4 text-sm leading-7 text-[var(--muted)]">
+                  <div className="rounded-3xl border border-(--line) bg-white/56 p-4 text-sm leading-7 text-(--muted)">
                     Chưa có shipping method nào. Tạo ít nhất một phương thức để checkout hiển thị đúng.
                   </div>
                 ) : (
                   shippingMethods.map((method) => (
-                    <div key={method.id} className="rounded-[1.5rem] border border-[var(--line)] bg-white/56 p-4">
+                    <div key={method.id} className="rounded-3xl border border-(--line) bg-white/56 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="font-semibold text-[var(--foreground-hero)]">{method.name}</div>
-                          <div className="mt-1 text-sm text-[var(--muted)]">{method.slug}</div>
+                          <div className="font-semibold text-(--foreground-hero)">{method.name}</div>
+                          <div className="mt-1 text-sm text-(--muted)">{method.slug}</div>
                         </div>
                         <Badge variant={method.active ? "success" : "secondary"}>{method.active ? "Active" : "Off"}</Badge>
                       </div>
-                      <div className="mt-3 text-sm leading-6 text-[var(--muted)]">{method.description}</div>
-                      <div className="mt-3 text-sm text-[var(--muted)]">
+                      <div className="mt-3 text-sm leading-6 text-(--muted)">{method.description}</div>
+                      <div className="mt-3 text-sm text-(--muted)">
                         {method.etaLabel} • {formatVnd(method.fee)}
                       </div>
                       <div className="mt-4 flex gap-2">
@@ -850,9 +892,9 @@ export default function AdminPage() {
                 <AdminPanelHeader title="Campaign list" description="Danh sách campaign hiện có." />
                 <AdminPanelBody className="grid gap-3">
                   {campaigns.map((campaign) => (
-                    <div key={campaign.id} className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                      <div className="font-semibold text-[var(--foreground-hero)]">{campaign.title}</div>
-                      <div className="mt-1 text-sm text-[var(--muted)]">{campaign.placement}</div>
+                    <div key={campaign.id} className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                      <div className="font-semibold text-(--foreground-hero)">{campaign.title}</div>
+                      <div className="mt-1 text-sm text-(--muted)">{campaign.placement}</div>
                     </div>
                   ))}
                 </AdminPanelBody>
@@ -862,12 +904,12 @@ export default function AdminPage() {
                 <AdminPanelHeader title="Promotion list" description="Các promotion đang tồn tại." />
                 <AdminPanelBody className="grid gap-3">
                   {promotions.map((promotion) => (
-                    <div key={promotion.id} className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
+                    <div key={promotion.id} className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="font-semibold text-[var(--foreground-hero)]">{promotion.code}</div>
+                        <div className="font-semibold text-(--foreground-hero)">{promotion.code}</div>
                         <Badge variant={promotion.active ? "success" : "secondary"}>{promotion.active ? "Active" : "Off"}</Badge>
                       </div>
-                      <div className="mt-1 text-sm text-[var(--muted)]">{promotion.title}</div>
+                      <div className="mt-1 text-sm text-(--muted)">{promotion.title}</div>
                       <div className="mt-3 flex gap-2">
                         <Button
                           type="button"
@@ -919,17 +961,17 @@ export default function AdminPage() {
               <AdminPanel>
                 <AdminPanelHeader title="Asset counts" description="Tín hiệu nhanh cho content ops." />
                 <AdminPanelBody className="space-y-3">
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Banner slots</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{bannerCount}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Banner slots</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{bannerCount}</div>
                   </div>
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Collections</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{collectionCount}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Collections</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{collectionCount}</div>
                   </div>
-                  <div className="rounded-[1.4rem] border border-[var(--line)] bg-white/56 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Media assets</div>
-                    <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">{mediaAssetCount}</div>
+                  <div className="rounded-[1.4rem] border border-(--line) bg-white/56 p-4">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-(--foreground-dim)">Media assets</div>
+                    <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">{mediaAssetCount}</div>
                   </div>
                 </AdminPanelBody>
               </AdminPanel>
@@ -975,13 +1017,13 @@ export default function AdminPage() {
                 <AdminPanelHeader title="Audit logs" description="Ghi nhận hành động gần đây trong quản trị." />
                 <AdminPanelBody className="grid gap-3">
                   {auditLogs.map((log) => (
-                    <div key={log.id} className="rounded-[1.5rem] border border-[var(--line)] bg-white/56 p-4">
+                    <div key={log.id} className="rounded-3xl border border-(--line) bg-white/56 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="font-semibold text-[var(--foreground-hero)]">{log.actionType} • {log.resourceType}</div>
-                        <div className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-dim)]">{formatDateTime(log.createdAt)}</div>
+                        <div className="font-semibold text-(--foreground-hero)">{log.actionType} • {log.resourceType}</div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-(--foreground-dim)">{formatDateTime(log.createdAt)}</div>
                       </div>
-                      <div className="mt-2 text-sm leading-6 text-[var(--muted)]">{log.message}</div>
-                      <div className="mt-2 text-sm text-[var(--muted)]">Actor: {log.actorName}</div>
+                      <div className="mt-2 text-sm leading-6 text-(--muted)">{log.message}</div>
+                      <div className="mt-2 text-sm text-(--muted)">Actor: {log.actorName}</div>
                     </div>
                   ))}
                 </AdminPanelBody>
@@ -992,15 +1034,15 @@ export default function AdminPage() {
               <AdminPanelHeader title="Role list" description="Các vai trò hiện có trong hệ." />
               <AdminPanelBody className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {adminRoles.map((role) => (
-                  <div key={role.id} className="rounded-[1.5rem] border border-[var(--line)] bg-white/56 p-4">
+                  <div key={role.id} className="rounded-3xl border border-(--line) bg-white/56 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-[var(--foreground-hero)]">{role.name}</div>
-                        <div className="mt-1 text-sm text-[var(--muted)]">{role.code}</div>
+                        <div className="font-semibold text-(--foreground-hero)">{role.name}</div>
+                        <div className="mt-1 text-sm text-(--muted)">{role.code}</div>
                       </div>
                       <Badge variant={role.active ? "success" : "secondary"}>{role.active ? "Active" : "Off"}</Badge>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{role.description}</p>
+                    <p className="mt-3 text-sm leading-6 text-(--muted)">{role.description}</p>
                     <div className="mt-4 flex gap-2">
                       <Button
                         type="button"
@@ -1077,14 +1119,14 @@ export default function AdminPage() {
           selectedOrder ? (
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
-                <div className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Cập nhật vòng đời đơn</div>
-                <div className="text-sm text-[var(--muted)]">Đổi trạng thái đúng bước để tồn kho, fulfillment và khách hàng luôn khớp.</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-(--foreground-dim)">Cập nhật vòng đời đơn</div>
+                <div className="text-sm text-(--muted)">Đổi trạng thái đúng bước để tồn kho, fulfillment và khách hàng luôn khớp.</div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <select
                   value={selectedStatus}
                   onChange={(event) => setSelectedStatus(event.target.value as OrderStatus)}
-                  className="flex h-11 rounded-2xl border border-[var(--line)] bg-white/74 px-4 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--line-strong)]"
+                  className="flex h-11 rounded-2xl border border-(--line) bg-white/74 px-4 py-2 text-sm text-(--foreground) outline-none focus:border-(--line-strong)"
                 >
                   {ORDER_STATUS_OPTIONS.map((status) => (
                     <option key={status.value} value={status.value} className="bg-white">
@@ -1101,23 +1143,23 @@ export default function AdminPage() {
         }
       />
 
-      <div className="surface-admin mt-6 rounded-[1.5rem] px-5 py-4">
+      <div className="surface-admin mt-6 rounded-3xl px-5 py-4">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-white/74 text-[var(--foreground-hero)]">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-(--line) bg-white/74 text-(--foreground-hero)">
             <TrendingUp className="h-4 w-4" />
           </div>
           <div className="space-y-1">
-            <div className="text-sm font-semibold text-[var(--foreground-hero)]">Operational rule</div>
-            <p className="text-sm leading-7 text-[var(--muted)]">
+            <div className="text-sm font-semibold text-(--foreground-hero)">Operational rule</div>
+            <p className="text-sm leading-7 text-(--muted)">
               Chuyển đơn sang <strong>Đã hủy</strong> sẽ hoàn tồn kho theo size. Layer này giữ cho storefront và dữ liệu bán hàng không lệch nhau.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 text-sm text-[var(--muted)]">
+      <div className="mt-4 text-sm text-(--muted)">
         Cần rà lại storefront công khai?{" "}
-        <Link href="/catalog" className="text-[var(--foreground-hero)] underline decoration-[var(--line-strong)] underline-offset-4">
+        <Link href="/catalog" className="text-(--foreground-hero) underline decoration-[var(--line-strong)] underline-offset-4">
           Mở catalog
         </Link>
         .
@@ -1125,3 +1167,4 @@ export default function AdminPage() {
     </div>
   );
 }
+

@@ -19,10 +19,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import com.webbanpc.shoestore.auth.JwtAuthenticationFilter;
 import com.webbanpc.shoestore.auth.JwtProperties;
 import com.webbanpc.shoestore.auth.RefreshCookieProperties;
+import com.webbanpc.shoestore.chatbot.ChatbotProperties;
+import com.webbanpc.shoestore.payment.PaymentOnlineProperties;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties({ AdminProperties.class, JwtProperties.class, RefreshCookieProperties.class })
+@EnableConfigurationProperties({
+    AdminProperties.class,
+    JwtProperties.class,
+    RefreshCookieProperties.class,
+    PaymentOnlineProperties.class,
+    ChatbotProperties.class })
 public class SecurityConfig {
 
     @Bean
@@ -38,6 +45,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/account/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/shoes/*/reviews").hasRole("USER")
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/chatbot/completions").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/sessions", "/api/v1/payments/mock/confirm").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/payments/sessions/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/home", "/api/v1/categories", "/api/v1/shoes/**", "/api/v1/catalog", "/api/v1/campaigns", "/api/v1/banner-slots", "/api/v1/collections/**", "/api/v1/promotions", "/api/v1/shipping-methods").permitAll()

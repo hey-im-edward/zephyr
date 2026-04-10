@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseCookie.ResponseCookieBuilder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -41,11 +42,7 @@ public class RefreshTokenCookieService {
     }
 
     public void clearRefreshTokenCookie(HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from(properties.name(), "")
-                .httpOnly(true)
-                .secure(properties.secure())
-                .sameSite(properties.sameSite())
-                .path(properties.path())
+        ResponseCookie cookie = applyCommonCookieAttributes(ResponseCookie.from(properties.name(), ""))
                 .maxAge(Duration.ZERO)
                 .build();
 
@@ -55,12 +52,22 @@ public class RefreshTokenCookieService {
     private ResponseCookie buildCookie(String refreshToken, LocalDateTime expiresAt) {
         long maxAgeSeconds = Math.max(0, Duration.between(LocalDateTime.now(), expiresAt).getSeconds());
 
-        return ResponseCookie.from(properties.name(), refreshToken)
+        return applyCommonCookieAttributes(ResponseCookie.from(properties.name(), refreshToken))
+                .maxAge(Duration.ofSeconds(maxAgeSeconds))
+                .build();
+    }
+
+    private ResponseCookieBuilder applyCommonCookieAttributes(ResponseCookieBuilder builder) {
+        ResponseCookieBuilder configuredBuilder = builder
                 .httpOnly(true)
                 .secure(properties.secure())
                 .sameSite(properties.sameSite())
-                .path(properties.path())
-                .maxAge(Duration.ofSeconds(maxAgeSeconds))
-                .build();
+                .path(properties.path());
+
+        if (properties.domain() != null) {
+            configuredBuilder = configuredBuilder.domain(properties.domain());
+        }
+
+        return configuredBuilder;
     }
 }
