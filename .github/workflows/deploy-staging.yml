@@ -25,12 +25,12 @@ jobs:
       mysql:
         image: mysql:8.1
         env:
-          MYSQL_ROOT_PASSWORD: root
+          MYSQL_ROOT_PASSWORD: ci_mysql_${{ github.run_id }}_${{ github.run_attempt }}
           MYSQL_DATABASE: shoe_store
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -proot --silent"
+          --health-cmd="mysqladmin ping -h localhost -pci_mysql_${{ github.run_id }}_${{ github.run_attempt }} --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=12
@@ -38,15 +38,16 @@ jobs:
       name: staging
       url: ${{ vars.STAGING_URL }}
     env:
-      STAGING_DEPLOY_URL: ${{ vars.STAGING_DEPLOY_URL }}
+      STAGING_DEPLOY_URL: ${{ vars.STAGING_DEPLOY_URL != '' && vars.STAGING_DEPLOY_URL || secrets.STAGING_DEPLOY_URL }}
       STAGING_DEPLOY_TOKEN: ${{ secrets.STAGING_DEPLOY_TOKEN }}
       STAGING_URL: ${{ vars.STAGING_URL }}
-      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/shoe_store?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      NEXT_PUBLIC_API_BASE_URL: ${{ vars.STAGING_API_BASE_URL != '' && vars.STAGING_API_BASE_URL || secrets.STAGING_API_BASE_URL }}
+      SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/shoe_store?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_PASSWORD: ci_mysql_${{ github.run_id }}_${{ github.run_attempt }}
       APP_ADMIN_USERNAME: admin@zephyr.vn
-      APP_ADMIN_PASSWORD: TestAdminPassword123!
-      APP_JWT_SECRET: ci-staging-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+      APP_ADMIN_PASSWORD: ${{ secrets.STAGING_APP_ADMIN_PASSWORD }}
+      APP_JWT_SECRET: ${{ secrets.STAGING_APP_JWT_SECRET }}
     steps:
       - uses: actions/checkout@v4
 
@@ -78,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${STAGING_DEPLOY_URL:-}" ]; then
-            echo "STAGING_DEPLOY_URL is required."
+            echo "STAGING_DEPLOY_URL is required (vars.STAGING_DEPLOY_URL or secrets.STAGING_DEPLOY_URL)."
             exit 1
           fi
           if [ -z "${STAGING_DEPLOY_TOKEN:-}" ]; then
@@ -87,6 +88,18 @@ jobs:
           fi
           if [ -z "${STAGING_URL:-}" ]; then
             echo "STAGING_URL is required for post-deploy health checks."
+            exit 1
+          fi
+          if [ -z "${NEXT_PUBLIC_API_BASE_URL:-}" ]; then
+            echo "STAGING_API_BASE_URL is required (vars.STAGING_API_BASE_URL or secrets.STAGING_API_BASE_URL)."
+            exit 1
+          fi
+          if [ -z "${APP_ADMIN_PASSWORD:-}" ]; then
+            echo "STAGING_APP_ADMIN_PASSWORD secret is required."
+            exit 1
+          fi
+          if [ -z "${APP_JWT_SECRET:-}" ]; then
+            echo "STAGING_APP_JWT_SECRET secret is required."
             exit 1
           fi
 

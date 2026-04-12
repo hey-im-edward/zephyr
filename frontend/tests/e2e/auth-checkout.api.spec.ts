@@ -27,7 +27,7 @@ type OrderableSelection = {
   sizeLabel: string;
 };
 
-const API_BASE_URL = process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8080/api/v1';
+const API_BASE_URL = process.env.E2E_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080/api/v1';
 
 function createCredentials(): Credentials {
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
@@ -147,7 +147,15 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
   const selected = await findFirstOrderableSelection(request);
 
   await page.goto('/');
-  await expect(page.getByRole('button', { name: /E2E User/ })).toBeVisible();
+  await expect
+    .poll(async () => {
+      const refreshed = await page.request.post(`${API_BASE_URL}/auth/refresh`);
+      return refreshed.status();
+    }, {
+      timeout: 15_000,
+    })
+    .toBe(200);
+  await expect(page.getByRole('button', { name: /E2E User/ })).toBeVisible({ timeout: 15_000 });
 
   await page.goto(`/shoes/${selected.shoeSlug}`);
   await page.getByRole('button', { name: `EU ${selected.sizeLabel}` }).click();
@@ -158,8 +166,13 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
   await page.waitForURL('**/checkout');
   await page.getByLabel('Tỉnh / Thành phố').fill('Ho Chi Minh');
   await page.getByLabel('Địa chỉ nhận hàng').fill('123 E2E Street');
+
   const submitOrderButton = page.getByRole('button', { name: 'Xác nhận đặt hàng' });
   await expect(submitOrderButton).toBeEnabled();
+  await submitOrderButton.click();
+  await expect(page.getByText('Vui lòng chọn phương thức thanh toán.')).toBeVisible();
+
+  await page.getByRole('radio', { name: 'Chuyển khoản ngân hàng' }).click();
   await submitOrderButton.click();
 
   await expect(page.getByText('Giỏ hàng đang trống')).toBeVisible({ timeout: 15_000 });
