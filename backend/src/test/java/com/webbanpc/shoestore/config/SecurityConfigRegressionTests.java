@@ -68,9 +68,10 @@ class SecurityConfigRegressionTests {
         mockMvc.perform(get("/api/v1/admin/orders"))
                 .andExpect(status().isForbidden());
 
+        String outputText = output.getOut();
         assertTrue(
-                output.getOut().contains("SECURITY_AUTHZ_DENIED"),
-                () -> "Expected security authorization denial log but output was: " + output.getOut());
+            outputText.contains("SECURITY_AUTHZ_DENIED"),
+            "Expected security authorization denial log but output was: " + outputText);
     }
 
     @Test

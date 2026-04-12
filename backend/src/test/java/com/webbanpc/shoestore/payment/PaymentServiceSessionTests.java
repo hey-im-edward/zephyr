@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -28,7 +29,10 @@ import com.webbanpc.shoestore.order.CustomerOrderRepository;
 import com.webbanpc.shoestore.order.PaymentMethod;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class PaymentServiceSessionTests {
+
+        private static final PaymentProvider VNPAY_PROVIDER = PaymentProvider.valueOf("VNPAY");
 
     @Mock
     private CustomerOrderRepository customerOrderRepository;
@@ -60,7 +64,7 @@ class PaymentServiceSessionTests {
         when(paymentOnlineProperties.enabled()).thenReturn(true);
         when(paymentOnlineProperties.sessionExpiryMinutes()).thenReturn(15);
         when(customerOrderRepository.findByOrderCodeForUpdate(eq(order.getOrderCode()))).thenReturn(Optional.of(order));
-        when(paymentTransactionRepository.findByOrderIdForUpdate(eq(order.getId()))).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findByOrderId(eq(order.getId()))).thenReturn(Optional.empty());
         when(vnPayService.createCheckoutData(eq(order), any(PaymentTransaction.class), anyString()))
                 .thenReturn(new VNPayCheckoutData(
                         "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=demo",
@@ -71,7 +75,7 @@ class PaymentServiceSessionTests {
 
         PaymentSessionResponse response = paymentService.createOrRefreshSession(order.getOrderCode(), "203.0.113.10");
 
-        assertEquals(PaymentProvider.VNPAY, response.provider());
+        assertEquals(VNPAY_PROVIDER, response.provider());
         assertEquals(PaymentChannel.CARD, response.channel());
         assertEquals(PaymentStatus.PENDING_ACTION, response.status());
         assertNotNull(response.checkoutUrl());
@@ -85,7 +89,7 @@ class PaymentServiceSessionTests {
         when(paymentOnlineProperties.enabled()).thenReturn(true);
         when(paymentOnlineProperties.sessionExpiryMinutes()).thenReturn(15);
         when(customerOrderRepository.findByOrderCodeForUpdate(eq(order.getOrderCode()))).thenReturn(Optional.of(order));
-        when(paymentTransactionRepository.findByOrderIdForUpdate(eq(order.getId()))).thenReturn(Optional.empty());
+        when(paymentTransactionRepository.findByOrderId(eq(order.getId()))).thenReturn(Optional.empty());
         when(vnPayService.createCheckoutData(eq(order), any(PaymentTransaction.class), anyString()))
             .thenReturn(new VNPayCheckoutData(
                 "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=demo",
@@ -96,7 +100,7 @@ class PaymentServiceSessionTests {
 
         PaymentSessionResponse response = paymentService.createOrRefreshSession(order.getOrderCode(), "203.0.113.10");
 
-        assertEquals(PaymentProvider.VNPAY, response.provider());
+        assertEquals(VNPAY_PROVIDER, response.provider());
         assertEquals(PaymentChannel.BANK_QR, response.channel());
         assertEquals(PaymentStatus.PENDING_ACTION, response.status());
         assertNotNull(response.checkoutUrl());
@@ -109,7 +113,7 @@ class PaymentServiceSessionTests {
         PaymentTransaction transaction = PaymentTransaction.builder()
                 .id(93L)
                 .order(order)
-                .provider(PaymentProvider.VNPAY)
+                .provider(VNPAY_PROVIDER)
                 .channel(PaymentChannel.CARD)
                 .status(PaymentStatus.PENDING_ACTION)
                 .referenceToken("ref-token-vnp")
@@ -128,8 +132,11 @@ class PaymentServiceSessionTests {
                 "NCB");
 
         when(vnPayService.parseCallbackData(anyMap())).thenReturn(callbackData);
-        when(paymentTransactionRepository.findByReferenceTokenForUpdate(eq("ref-token-vnp")))
-                .thenReturn(Optional.of(transaction));
+        stubOptionalPaymentTransactionMethod(
+                "findByReferenceTokenForUpdate",
+                new Class<?>[]{String.class},
+                Optional.of(transaction),
+                "ref-token-vnp");
         when(vnPayService.isMatchingAmount(eq(order.getTotalAmount()), eq(245000000L))).thenReturn(true);
         when(vnPayService.buildCallbackInstruction(eq(callbackData))).thenReturn("VNPay callback responseCode=00, transactionStatus=00");
         when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
@@ -157,7 +164,7 @@ class PaymentServiceSessionTests {
         PaymentTransaction transaction = PaymentTransaction.builder()
                 .id(94L)
                 .order(order)
-                .provider(PaymentProvider.VNPAY)
+                .provider(VNPAY_PROVIDER)
                 .channel(PaymentChannel.CARD)
                 .status(PaymentStatus.PAID)
                 .referenceToken("ref-token-vnp")
@@ -177,8 +184,11 @@ class PaymentServiceSessionTests {
 
         when(vnPayService.isValidSignature(anyMap())).thenReturn(true);
         when(vnPayService.parseCallbackData(anyMap())).thenReturn(callbackData);
-        when(paymentTransactionRepository.findByReferenceTokenForUpdate(eq("ref-token-vnp")))
-                .thenReturn(Optional.of(transaction));
+        stubOptionalPaymentTransactionMethod(
+                "findByReferenceTokenForUpdate",
+                new Class<?>[]{String.class},
+                Optional.of(transaction),
+                "ref-token-vnp");
         when(vnPayService.isMatchingAmount(eq(order.getTotalAmount()), eq(245000000L))).thenReturn(true);
 
         VNPayIpnResponse response = paymentService.handleVnpayIpn(Map.of("vnp_SecureHash", "valid"));
@@ -193,7 +203,7 @@ class PaymentServiceSessionTests {
         PaymentTransaction transaction = PaymentTransaction.builder()
                 .id(95L)
                 .order(order)
-                .provider(PaymentProvider.VNPAY)
+                .provider(VNPAY_PROVIDER)
                 .channel(PaymentChannel.CARD)
                 .status(PaymentStatus.PENDING_ACTION)
                 .referenceToken("ref-token-querydr")
@@ -213,7 +223,7 @@ class PaymentServiceSessionTests {
                 paidAt,
                 "Confirm Success");
 
-        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceTokenForUpdate(eq(order.getOrderCode()), eq("ref-token-querydr")))
+        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceToken(eq(order.getOrderCode()), eq("ref-token-querydr")))
                 .thenReturn(Optional.of(transaction));
         when(vnPayService.queryTransaction(eq(transaction))).thenReturn(Optional.of(queryResult));
         when(vnPayService.isMatchingAmount(eq(order.getTotalAmount()), eq(245000000L))).thenReturn(true);
@@ -235,7 +245,7 @@ class PaymentServiceSessionTests {
         PaymentTransaction transaction = PaymentTransaction.builder()
                 .id(96L)
                 .order(order)
-                .provider(PaymentProvider.VNPAY)
+                .provider(VNPAY_PROVIDER)
                 .channel(PaymentChannel.CARD)
                 .status(PaymentStatus.PENDING_ACTION)
                 .referenceToken("ref-token-querydr-empty")
@@ -244,7 +254,7 @@ class PaymentServiceSessionTests {
                 .updatedAt(LocalDateTime.now().minusMinutes(1))
                 .build();
 
-        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceTokenForUpdate(eq(order.getOrderCode()), eq("ref-token-querydr-empty")))
+        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceToken(eq(order.getOrderCode()), eq("ref-token-querydr-empty")))
                 .thenReturn(Optional.of(transaction));
         when(vnPayService.queryTransaction(eq(transaction))).thenReturn(Optional.empty());
 
@@ -270,7 +280,7 @@ class PaymentServiceSessionTests {
                 .updatedAt(LocalDateTime.now().minusMinutes(1))
                 .build();
 
-        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceTokenForUpdate(eq(order.getOrderCode()), eq("ref-token-123")))
+        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceToken(eq(order.getOrderCode()), eq("ref-token-123")))
                 .thenReturn(Optional.of(transaction));
         when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -299,7 +309,7 @@ class PaymentServiceSessionTests {
                 .updatedAt(LocalDateTime.now().minusMinutes(1))
                 .build();
 
-        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceTokenForUpdate(eq(order.getOrderCode()), eq("ref-token-321")))
+        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceToken(eq(order.getOrderCode()), eq("ref-token-321")))
                 .thenReturn(Optional.of(transaction));
 
         PaymentSessionResponse response = paymentService.confirmMockPayment(order.getOrderCode(), "ref-token-321");
@@ -314,7 +324,7 @@ class PaymentServiceSessionTests {
         PaymentTransaction transaction = PaymentTransaction.builder()
                 .id(97L)
                 .order(order)
-                .provider(PaymentProvider.VNPAY)
+                .provider(VNPAY_PROVIDER)
                 .channel(PaymentChannel.BANK_QR)
                 .status(PaymentStatus.PENDING_ACTION)
                 .referenceToken("ref-token-local-demo")
@@ -325,7 +335,7 @@ class PaymentServiceSessionTests {
                 .updatedAt(LocalDateTime.now().minusMinutes(1))
                 .build();
 
-        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceTokenForUpdate(eq(order.getOrderCode()), eq("ref-token-local-demo")))
+        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceToken(eq(order.getOrderCode()), eq("ref-token-local-demo")))
                 .thenReturn(Optional.of(transaction));
         when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -343,7 +353,7 @@ class PaymentServiceSessionTests {
         PaymentTransaction transaction = PaymentTransaction.builder()
                 .id(98L)
                 .order(order)
-                .provider(PaymentProvider.VNPAY)
+                .provider(VNPAY_PROVIDER)
                 .channel(PaymentChannel.BANK_QR)
                 .status(PaymentStatus.PENDING_ACTION)
                 .referenceToken("ref-token-remote-demo")
@@ -354,7 +364,7 @@ class PaymentServiceSessionTests {
                 .updatedAt(LocalDateTime.now().minusMinutes(1))
                 .build();
 
-        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceTokenForUpdate(eq(order.getOrderCode()), eq("ref-token-remote-demo")))
+        when(paymentTransactionRepository.findByOrderOrderCodeAndReferenceToken(eq(order.getOrderCode()), eq("ref-token-remote-demo")))
                 .thenReturn(Optional.of(transaction));
 
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -392,4 +402,19 @@ class PaymentServiceSessionTests {
                 .totalAmount(new BigDecimal("2450000.00"))
                 .build();
     }
+
+        @SuppressWarnings("unchecked")
+        private void stubOptionalPaymentTransactionMethod(
+                        String methodName,
+                        Class<?>[] parameterTypes,
+                        Optional<PaymentTransaction> returnedValue,
+                        Object... arguments) {
+                try {
+                        Method method = paymentTransactionRepository.getClass().getMethod(methodName, parameterTypes);
+                        when((Optional<PaymentTransaction>) method.invoke(paymentTransactionRepository, arguments))
+                                        .thenReturn(returnedValue);
+                } catch (ReflectiveOperationException exception) {
+                        throw new IllegalStateException("Failed to stub repository method: " + methodName, exception);
+                }
+        }
 }

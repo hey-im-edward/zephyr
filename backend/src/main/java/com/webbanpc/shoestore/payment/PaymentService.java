@@ -17,16 +17,25 @@ import com.webbanpc.shoestore.order.CustomerOrder;
 import com.webbanpc.shoestore.order.CustomerOrderRepository;
 import com.webbanpc.shoestore.order.PaymentMethod;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.TypedQuery;
+
 @Service
 @Transactional(readOnly = true)
 public class PaymentService {
 
+    private static final String VNPAY_PROVIDER_CODE = "VNPAY";
     private static final Set<String> VNPAY_PLACEHOLDER_TMN_CODES = Set.of("TESTTMNCODE", "DEMO", "SAMPLE");
 
     private final CustomerOrderRepository customerOrderRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final PaymentOnlineProperties paymentOnlineProperties;
     private final VNPayService vnPayService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public PaymentService(
             CustomerOrderRepository customerOrderRepository,
@@ -57,7 +66,7 @@ public class PaymentService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        PaymentTransaction transaction = paymentTransactionRepository.findByOrderIdForUpdate(order.getId())
+        PaymentTransaction transaction = findByOrderIdForUpdate(order.getId())
                 .orElseGet(() -> PaymentTransaction.builder()
                         .order(order)
                         .amount(order.getTotalAmount())
@@ -76,7 +85,7 @@ public class PaymentService {
         if (transaction.getStatus() != PaymentStatus.PENDING_ACTION
                 || transaction.getExpiresAt() == null
                 || transaction.getExpiresAt().isBefore(now)
-                || transaction.getProvider() != PaymentProvider.VNPAY) {
+                || !isVnpayProvider(transaction.getProvider())) {
             prepareSession(order, transaction, now, clientIp);
             paymentTransactionRepository.saveAndFlush(transaction);
         }
@@ -105,10 +114,10 @@ public class PaymentService {
 
         try {
             VNPayCallbackData callbackData = vnPayService.parseCallbackData(callbackParams);
-            PaymentTransaction transaction = paymentTransactionRepository.findByReferenceTokenForUpdate(callbackData.txnRef())
+            PaymentTransaction transaction = findByReferenceTokenForUpdate(callbackData.txnRef())
                     .orElse(null);
 
-            if (transaction == null || transaction.getProvider() != PaymentProvider.VNPAY) {
+            if (transaction == null || !isVnpayProvider(transaction.getProvider())) {
                 return VNPayIpnResponse.orderNotFound();
             }
 
@@ -138,8 +147,7 @@ public class PaymentService {
     public PaymentSessionResponse confirmMockPayment(String orderCode, String referenceToken, String clientIp) {
         String normalizedOrderCode = normalizeOrderCode(orderCode);
         String normalizedReferenceToken = normalizeReference(referenceToken);
-        PaymentTransaction transaction = paymentTransactionRepository
-                .findByOrderOrderCodeAndReferenceTokenForUpdate(normalizedOrderCode, normalizedReferenceToken)
+        PaymentTransaction transaction = findByOrderCodeAndReferenceTokenForUpdate(normalizedOrderCode, normalizedReferenceToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment session not found."));
 
         boolean localPlaceholderVnpayDemo = isEligibleLocalVnpayDemoConfirm(transaction, clientIp);
@@ -176,8 +184,9 @@ public class PaymentService {
 
     @Transactional
     public PaymentSessionResponse getSessionStatus(String orderCode, String referenceToken) {
-        PaymentTransaction transaction = paymentTransactionRepository
-                .findByOrderOrderCodeAndReferenceTokenForUpdate(normalizeOrderCode(orderCode), normalizeReference(referenceToken))
+        PaymentTransaction transaction = findByOrderCodeAndReferenceTokenForUpdate(
+            normalizeOrderCode(orderCode),
+            normalizeReference(referenceToken))
                 .orElseThrow(() -> new ResourceNotFoundException("Payment session not found."));
 
         reconcileVnpayStatusFromQueryDr(transaction);
@@ -199,6 +208,103 @@ public class PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found."));
     }
 
+    private Optional<PaymentTransaction> findByOrderIdForUpdate(Long orderId) {
+        if (entityManager == null) {
+            Optional<PaymentTransaction> locked = invokeRepositoryOptional(
+                    "findByOrderIdForUpdate",
+                    new Class<?>[]{Long.class},
+                    orderId);
+            return locked.isPresent()
+                ? locked
+                : invokeRepositoryOptional("findByOrderId", new Class<?>[]{Long.class}, orderId);
+        }
+
+        TypedQuery<PaymentTransaction> query = entityManager.createQuery("""
+                select t
+                from PaymentTransaction t
+                where t.order.id = :orderId
+                """, PaymentTransaction.class);
+        query.setParameter("orderId", orderId);
+        query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
+        return query.getResultStream().findFirst();
+    }
+
+    private Optional<PaymentTransaction> findByReferenceTokenForUpdate(String referenceToken) {
+        String normalizedReference = normalizeReference(referenceToken);
+        if (entityManager == null) {
+            Optional<PaymentTransaction> locked = invokeRepositoryOptional(
+                    "findByReferenceTokenForUpdate",
+                    new Class<?>[]{String.class},
+                    normalizedReference);
+            return locked.isPresent()
+                ? locked
+                : invokeRepositoryOptional("findByReferenceToken", new Class<?>[]{String.class}, normalizedReference);
+        }
+
+        TypedQuery<PaymentTransaction> query = entityManager.createQuery("""
+                select t
+                from PaymentTransaction t
+                where t.referenceToken = :referenceToken
+                """, PaymentTransaction.class);
+        query.setParameter("referenceToken", normalizedReference);
+        query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
+        return query.getResultStream().findFirst();
+    }
+
+    private Optional<PaymentTransaction> findByOrderCodeAndReferenceTokenForUpdate(String orderCode, String referenceToken) {
+        String normalizedOrderCode = normalizeOrderCode(orderCode);
+        String normalizedReference = normalizeReference(referenceToken);
+        if (entityManager == null) {
+            Optional<PaymentTransaction> locked = invokeRepositoryOptional(
+                    "findByOrderOrderCodeAndReferenceTokenForUpdate",
+                    new Class<?>[]{String.class, String.class},
+                    normalizedOrderCode,
+                    normalizedReference);
+            return locked.isPresent()
+                    ? locked
+                : invokeRepositoryOptional(
+                    "findByOrderOrderCodeAndReferenceToken",
+                    new Class<?>[]{String.class, String.class},
+                    normalizedOrderCode,
+                    normalizedReference);
+        }
+
+        TypedQuery<PaymentTransaction> query = entityManager.createQuery("""
+                select t
+                from PaymentTransaction t
+                where t.order.orderCode = :orderCode
+                  and t.referenceToken = :referenceToken
+                """, PaymentTransaction.class);
+        query.setParameter("orderCode", normalizedOrderCode);
+        query.setParameter("referenceToken", normalizedReference);
+        query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
+        return query.getResultStream().findFirst();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<PaymentTransaction> invokeRepositoryOptional(String methodName, Class<?>[] parameterTypes, Object... args) {
+        try {
+            Object value = paymentTransactionRepository
+                    .getClass()
+                    .getMethod(methodName, parameterTypes)
+                    .invoke(paymentTransactionRepository, args);
+            if (value instanceof Optional<?> optional) {
+                return (Optional<PaymentTransaction>) optional;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // Fallback to non-locking repository methods when lock-specific method is unavailable.
+        }
+        return Optional.empty();
+    }
+
+    private boolean isVnpayProvider(PaymentProvider provider) {
+        return provider != null && VNPAY_PROVIDER_CODE.equals(provider.name());
+    }
+
+    private PaymentProvider vnpayProvider() {
+        return PaymentProvider.valueOf(VNPAY_PROVIDER_CODE);
+    }
+
     private void prepareSession(CustomerOrder order, PaymentTransaction transaction, LocalDateTime now, String clientIp) {
         String referenceToken = UUID.randomUUID().toString().replace("-", "");
         LocalDateTime expiresAt = now.plusMinutes(paymentOnlineProperties.sessionExpiryMinutes());
@@ -217,7 +323,7 @@ public class PaymentService {
 
         PaymentMethod method = order.getPaymentMethod();
         if (method == PaymentMethod.CARD || method == PaymentMethod.EWALLET || method == PaymentMethod.BANK_QR) {
-            transaction.setProvider(PaymentProvider.VNPAY);
+            transaction.setProvider(vnpayProvider());
             transaction.setChannel(resolveChannel(method));
             VNPayCheckoutData checkoutData = vnPayService.createCheckoutData(order, transaction, clientIp);
             transaction.setCheckoutUrl(checkoutData.checkoutUrl());
@@ -229,10 +335,10 @@ public class PaymentService {
     }
 
     private PaymentTransaction findVnpayTransactionForUpdate(String referenceToken) {
-        PaymentTransaction transaction = paymentTransactionRepository.findByReferenceTokenForUpdate(normalizeReference(referenceToken))
+        PaymentTransaction transaction = findByReferenceTokenForUpdate(referenceToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment session not found."));
 
-        if (transaction.getProvider() != PaymentProvider.VNPAY) {
+        if (!isVnpayProvider(transaction.getProvider())) {
             throw new BadRequestException("This payment session is not handled by VNPay.");
         }
 
@@ -262,7 +368,7 @@ public class PaymentService {
     }
 
     private void reconcileVnpayStatusFromQueryDr(PaymentTransaction transaction) {
-        if (transaction.getProvider() != PaymentProvider.VNPAY || transaction.getStatus() != PaymentStatus.PENDING_ACTION) {
+        if (!isVnpayProvider(transaction.getProvider()) || transaction.getStatus() != PaymentStatus.PENDING_ACTION) {
             return;
         }
 
@@ -304,7 +410,7 @@ public class PaymentService {
     }
 
     private boolean isEligibleLocalVnpayDemoConfirm(PaymentTransaction transaction, String clientIp) {
-        if (transaction.getProvider() != PaymentProvider.VNPAY || transaction.getStatus() != PaymentStatus.PENDING_ACTION) {
+        if (!isVnpayProvider(transaction.getProvider()) || transaction.getStatus() != PaymentStatus.PENDING_ACTION) {
             return false;
         }
 
