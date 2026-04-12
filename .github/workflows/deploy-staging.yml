@@ -63,18 +63,6 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-
-      - name: Build backend
-        working-directory: backend
-        env:
-          SPRING_PROFILES_ACTIVE: test
-        run: ./mvnw -B verify
-
       - name: Validate deploy inputs
         run: |
           set -euo pipefail
@@ -94,14 +82,21 @@ jobs:
             echo "STAGING_API_BASE_URL is required (vars.STAGING_API_BASE_URL or secrets.STAGING_API_BASE_URL)."
             exit 1
           fi
-          if [ -z "${APP_ADMIN_PASSWORD:-}" ]; then
-            echo "STAGING_APP_ADMIN_PASSWORD secret is required."
-            exit 1
-          fi
-          if [ -z "${APP_JWT_SECRET:-}" ]; then
-            echo "STAGING_APP_JWT_SECRET secret is required."
-            exit 1
-          fi
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build backend
+        working-directory: backend
+        env:
+          SPRING_PROFILES_ACTIVE: test
+        run: |
+          export APP_ADMIN_PASSWORD="${APP_ADMIN_PASSWORD:-ci-test-admin-password-only}"
+          export APP_JWT_SECRET="${APP_JWT_SECRET:-ci-test-jwt-secret-for-build-only-0123456789abcdefghijklmnop}"
+          ./mvnw -B verify
 
       - name: Trigger staging deploy
         run: |

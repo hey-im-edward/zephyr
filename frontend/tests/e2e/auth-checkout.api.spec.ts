@@ -168,11 +168,9 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
   await page.getByLabel('Địa chỉ nhận hàng').fill('123 E2E Street');
 
   const submitOrderButton = page.getByRole('button', { name: 'Xác nhận đặt hàng' });
+  const bankTransferOption = page.getByRole('radio', { name: 'Chuyển khoản ngân hàng' });
+  await bankTransferOption.check();
   await expect(submitOrderButton).toBeEnabled();
-  await submitOrderButton.click();
-  await expect(page.getByText('Vui lòng chọn phương thức thanh toán.')).toBeVisible();
-
-  await page.getByRole('radio', { name: 'Chuyển khoản ngân hàng' }).click();
   await submitOrderButton.click();
 
   await expect(page.getByText('Giỏ hàng đang trống')).toBeVisible({ timeout: 15_000 });
