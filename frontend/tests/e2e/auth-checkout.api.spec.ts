@@ -169,7 +169,7 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
 
   const submitOrderButton = page.getByRole('button', { name: 'Xác nhận đặt hàng' });
   const bankTransferOption = page.getByRole('radio', { name: 'Chuyển khoản ngân hàng' });
-  await bankTransferOption.check();
+  await bankTransferOption.check({ force: true });
   await expect(submitOrderButton).toBeEnabled();
   await submitOrderButton.click();
 
