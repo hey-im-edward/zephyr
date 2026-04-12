@@ -66,6 +66,10 @@ jobs:
       - name: Validate deploy inputs
         run: |
           set -euo pipefail
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "Non-main ref (${GITHUB_REF_NAME}): skip deploy input validation and deployment steps."
+            exit 0
+          fi
           if [ -z "${STAGING_DEPLOY_URL:-}" ]; then
             echo "STAGING_DEPLOY_URL is required (vars.STAGING_DEPLOY_URL or secrets.STAGING_DEPLOY_URL)."
             exit 1
@@ -99,6 +103,7 @@ jobs:
           ./mvnw -B verify
 
       - name: Trigger staging deploy
+        if: ${{ github.ref_name == 'main' }}
         run: |
           curl --fail-with-body --show-error --silent \
             -X POST "$STAGING_DEPLOY_URL" \
@@ -107,6 +112,7 @@ jobs:
             -d '{"environment":"staging","source":"github-actions"}'
 
       - name: Verify staging health
+        if: ${{ github.ref_name == 'main' }}
         run: |
           set -euo pipefail
           BASE_URL="${STAGING_URL%/}"
@@ -122,6 +128,6 @@ jobs:
           exit 1
 
       - name: Rollback note
-        if: ${{ failure() }}
+        if: ${{ failure() && github.ref_name == 'main' }}
         run: |
           echo "Deployment failed. Roll back to the last stable release in your platform and run smoke checks against $STAGING_URL."
