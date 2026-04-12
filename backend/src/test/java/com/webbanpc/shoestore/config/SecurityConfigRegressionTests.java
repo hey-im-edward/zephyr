@@ -6,9 +6,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,6 +19,7 @@ import org.springframework.test.web.servlet.ResultMatcher;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ExtendWith(OutputCaptureExtension.class)
 @SuppressWarnings("null")
 class SecurityConfigRegressionTests {
 
@@ -37,16 +41,36 @@ class SecurityConfigRegressionTests {
     }
 
     @Test
-    void shouldRequireAuthenticationForAccountEndpoints() throws Exception {
+    void shouldKeepVnpayReturnRoutePublic() throws Exception {
+        mockMvc.perform(get("/api/v1/payments/vnpay/return"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldKeepVnpayIpnRoutePublic() throws Exception {
+        mockMvc.perform(get("/api/v1/payments/vnpay/ipn"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void shouldRequireAuthenticationForAccountEndpoints(CapturedOutput output) throws Exception {
         mockMvc.perform(get("/api/v1/account/orders"))
                 .andExpect(isUnauthorizedOrForbidden());
+
+        assertTrue(
+                output.getOut().contains("SECURITY_AUTH_FAILURE"),
+                () -> "Expected security auth failure log but output was: " + output.getOut());
     }
 
     @Test
     @WithMockUser(roles = "USER")
-    void shouldForbidUserRoleOnAdminEndpoints() throws Exception {
+    void shouldForbidUserRoleOnAdminEndpoints(CapturedOutput output) throws Exception {
         mockMvc.perform(get("/api/v1/admin/orders"))
                 .andExpect(status().isForbidden());
+
+        assertTrue(
+                output.getOut().contains("SECURITY_AUTHZ_DENIED"),
+                () -> "Expected security authorization denial log but output was: " + output.getOut());
     }
 
     @Test

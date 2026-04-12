@@ -50,6 +50,12 @@ import type {
 } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1";
+const DEFAULT_API_TIMEOUT_MS = 12_000;
+
+const parsedApiTimeoutMs = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS ?? "");
+const API_REQUEST_TIMEOUT_MS = Number.isFinite(parsedApiTimeoutMs) && parsedApiTimeoutMs > 0
+  ? parsedApiTimeoutMs
+  : DEFAULT_API_TIMEOUT_MS;
 
 export class ApiError extends Error {
   status: number;
@@ -81,16 +87,46 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
 }
 
 async function request<T>(path: string, { token, revalidate, headers, ...init }: RequestOptions = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(revalidate !== undefined ? { next: { revalidate } } : {}),
-  });
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    timeoutController.abort("request-timeout");
+  }, API_REQUEST_TIMEOUT_MS);
+
+  if (init.signal) {
+    if (init.signal.aborted) {
+      timeoutController.abort(init.signal.reason);
+    } else {
+      init.signal.addEventListener(
+        "abort",
+        () => {
+          timeoutController.abort(init.signal?.reason);
+        },
+        { once: true },
+      );
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      signal: timeoutController.signal,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...(revalidate !== undefined ? { next: { revalidate } } : {}),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("Hết thời gian chờ API. Vui lòng thử lại.", 408);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const message = await readProblemMessage(response);
@@ -735,8 +771,8 @@ export async function getAdminAuditLogs(token: string): Promise<AuditLog[]> {
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   COD: "Thanh toán khi nhận hàng",
-  BANK_TRANSFER: "Chuyển khoản ngân hàng",
+  BANK_TRANSFER: "Chuyển khoản ngân hàng (thủ công)",
   CARD: "Thẻ tín dụng / ghi nợ",
-  BANK_QR: "Quét QR ngân hàng",
+  BANK_QR: "Chuyển khoản ngân hàng (VNPay QR)",
   EWALLET: "Ví điện tử",
 };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -95,6 +95,17 @@ export default function AccountPage() {
   const [isOrderPaging, setIsOrderPaging] = useState(false);
   const [busyAddressId, setBusyAddressId] = useState<number | null>(null);
   const [busyWishlistSlug, setBusyWishlistSlug] = useState<string | null>(null);
+  const [focusOrderCode, setFocusOrderCode] = useState("");
+  const hasAutoOpenedFocusOrderRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const orderCodeFromQuery = new URLSearchParams(window.location.search).get("focusOrderCode") ?? "";
+    setFocusOrderCode(orderCodeFromQuery.trim());
+  }, []);
 
   const profileForm = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
@@ -125,18 +136,20 @@ export default function AccountPage() {
     },
   });
 
-  const loadWorkspace = useCallback(async () => {
+  const loadWorkspace = useCallback(async (fallbackUser: typeof user | null) => {
     const token = await getAccessToken();
     if (!token) return;
 
+    const currentUserTask = fallbackUser ? Promise.resolve(fallbackUser) : reloadUser();
+
     const [currentUserResult, orderListResult, addressListResult, wishlistResult] = await Promise.allSettled([
-      reloadUser(),
+      currentUserTask,
       listMyOrders(token, 1, ORDER_PAGE_SIZE),
       getMyAddresses(token),
       getWishlist(token),
     ]);
 
-    const resolvedUser = currentUserResult.status === "fulfilled" ? currentUserResult.value : user;
+    const resolvedUser = currentUserResult.status === "fulfilled" ? currentUserResult.value : fallbackUser;
     if (resolvedUser) {
       profileForm.reset({
         fullName: resolvedUser.fullName,
@@ -178,7 +191,7 @@ export default function AccountPage() {
     if (failedSections.length > 0) {
       toast.error(`Một số phần dữ liệu tài khoản chưa tải được: ${failedSections.join(", ")}.`);
     }
-  }, [addressForm, getAccessToken, profileForm, reloadUser, user]);
+  }, [addressForm, getAccessToken, profileForm, reloadUser]);
 
   const loadOrdersPage = useCallback(
     async (targetPage: number) => {
@@ -199,7 +212,7 @@ export default function AccountPage() {
     let active = true;
 
     setIsWorkspaceLoading(true);
-    void loadWorkspace()
+    void loadWorkspace(user ?? null)
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Không thể tải dữ liệu tài khoản.");
       })
@@ -212,27 +225,49 @@ export default function AccountPage() {
     return () => {
       active = false;
     };
-  }, [isAuthenticated, isReady, loadWorkspace, user?.role]);
+  }, [isAuthenticated, isReady, loadWorkspace, user]);
 
   useEffect(() => {
     if (!isReady || !isAuthenticated || user?.role !== "ADMIN") return;
     router.replace("/admin");
   }, [isAuthenticated, isReady, router, user?.role]);
 
-  async function openOrderDetail(orderId: number) {
-    try {
-      const token = await getAccessToken();
-      if (!token) {
-        toast.error("Phiên đăng nhập đã hết hạn.");
-        return;
+  const openOrderDetail = useCallback(
+    async (orderId: number) => {
+      try {
+        const token = await getAccessToken();
+        if (!token) {
+          toast.error("Phiên đăng nhập đã hết hạn.");
+          return;
+        }
+        const detail = await getMyOrder(token, orderId);
+        setSelectedOrder(detail);
+        setIsDetailOpen(true);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Không thể tải chi tiết đơn.");
       }
-      const detail = await getMyOrder(token, orderId);
-      setSelectedOrder(detail);
-      setIsDetailOpen(true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Không thể tải chi tiết đơn.");
+    },
+    [getAccessToken],
+  );
+
+  useEffect(() => {
+    if (!focusOrderCode || hasAutoOpenedFocusOrderRef.current) {
+      return;
     }
-  }
+
+    if (!hasLoadedWorkspace || orders.length === 0) {
+      return;
+    }
+
+    const targetOrder = orders.find((order) => order.orderCode === focusOrderCode);
+    if (!targetOrder) {
+      return;
+    }
+
+    hasAutoOpenedFocusOrderRef.current = true;
+    toast.message(`Đang mở trạng thái đơn ${focusOrderCode}.`);
+    void openOrderDetail(targetOrder.id);
+  }, [focusOrderCode, hasLoadedWorkspace, openOrderDetail, orders]);
 
   function handleOrderPageChange(nextPage: number) {
     if (nextPage < 1 || nextPage > orderPagination.totalPages || nextPage === orderPagination.page) {
