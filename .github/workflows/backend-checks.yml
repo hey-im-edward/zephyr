@@ -52,9 +52,9 @@ jobs:
       APP_JWT_SECRET: ci-backend-jwt-secret-0123456789-abcdefghijklmnopqrstuvwxyz
       SPRING_PROFILES_ACTIVE: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ inputs.java_version }}
