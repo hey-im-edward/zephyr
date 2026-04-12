@@ -4,8 +4,7 @@
       "name": "app.cors.allowed-origins",
       "type": "java.util.List<java.lang.String>",
       "sourceType": "com.webbanpc.shoestore.config.CorsProperties",
-      "description": "Danh sách origin được phép gọi API backend.",
-      "defaultValue": "http://localhost:3000"
+      "description": "Danh sách origin được phép gọi API backend. Bat buoc cau hinh qua APP_CORS_ALLOWED_ORIGINS."
     },
     {
       "name": "app.admin.username",
@@ -18,8 +17,7 @@
       "name": "app.admin.password",
       "type": "java.lang.String",
       "sourceType": "com.webbanpc.shoestore.config.AdminProperties",
-      "description": "Mật khẩu tài khoản admin mặc định được seed khi backend khởi động.",
-      "defaultValue": "change-me-now"
+      "description": "Mat khau tai khoan admin. Bat buoc cau hinh qua APP_ADMIN_PASSWORD, khong hard-code trong source."
     },
     {
       "name": "app.jwt.secret",
@@ -40,6 +38,64 @@
       "sourceType": "com.webbanpc.shoestore.auth.JwtProperties",
       "description": "Số ngày hiệu lực của refresh token.",
       "defaultValue": 14
+    },
+    {
+      "name": "app.payment.online.requests-per-minute",
+      "type": "java.lang.Integer",
+      "sourceType": "com.webbanpc.shoestore.payment.PaymentOnlineProperties",
+      "description": "Số request payment tối đa cho mỗi key theo phút.",
+      "defaultValue": 20
+    },
+    {
+      "name": "app.payment.vnpay.tmn-code",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "Mã terminal (vnp_TmnCode) do VNPay cung cấp."
+    },
+    {
+      "name": "app.payment.vnpay.hash-secret",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "Chuỗi bí mật dùng để ký và verify vnp_SecureHash."
+    },
+    {
+      "name": "app.payment.vnpay.pay-url",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "Endpoint thanh toán VNPay (sandbox hoặc production).",
+      "defaultValue": "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+    },
+    {
+      "name": "app.payment.vnpay.querydr-url",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "Endpoint VNPay querydr để backend chủ động đối soát trạng thái giao dịch."
+    },
+    {
+      "name": "app.payment.vnpay.query-ip-address",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "Địa chỉ IP gửi trong request querydr.",
+      "defaultValue": "127.0.0.1"
+    },
+    {
+      "name": "app.payment.vnpay.query-timeout-ms",
+      "type": "java.lang.Integer",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "Timeout (ms) khi gọi VNPay querydr.",
+      "defaultValue": 5000
+    },
+    {
+      "name": "app.payment.vnpay.return-url",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "URL frontend/backend nhận redirect sau khi khách hoàn tất thanh toán."
+    },
+    {
+      "name": "app.payment.vnpay.ipn-url",
+      "type": "java.lang.String",
+      "sourceType": "com.webbanpc.shoestore.payment.VNPayProperties",
+      "description": "URL IPN server-to-server để VNPay gọi xác nhận giao dịch."
     }
   ]
 }

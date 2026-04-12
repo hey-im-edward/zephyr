@@ -178,7 +178,7 @@ public class OrderService {
 
     @Transactional
     public OrderDetailResponse updateStatus(Long id, OrderStatus nextStatus) {
-        CustomerOrder order = customerOrderRepository.findWithItemsById(id)
+        CustomerOrder order = customerOrderRepository.findWithItemsByIdForUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
 
         if (requiresPaymentSettlement(nextStatus) && !paymentService.isOrderPaymentSettled(order)) {

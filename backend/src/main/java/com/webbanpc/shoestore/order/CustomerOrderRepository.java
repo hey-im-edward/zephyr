@@ -8,15 +8,35 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
+
 public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Long> {
 
-  Optional<CustomerOrder> findByOrderCode(String orderCode);
+    Optional<CustomerOrder> findByOrderCode(String orderCode);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("""
+      select o
+      from CustomerOrder o
+      where o.orderCode = :orderCode
+      """)
+  Optional<CustomerOrder> findByOrderCodeForUpdate(@Param("orderCode") String orderCode);
 
     @EntityGraph(attributePaths = { "items", "user" })
     Optional<CustomerOrder> findWithItemsById(Long id);
+
+    @EntityGraph(attributePaths = { "items", "user" })
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select o
+            from CustomerOrder o
+            where o.id = :id
+            """)
+    Optional<CustomerOrder> findWithItemsByIdForUpdate(@Param("id") Long id);
 
     @EntityGraph(attributePaths = { "items", "user" })
     List<CustomerOrder> findAllByOrderByCreatedAtDesc();

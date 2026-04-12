@@ -7,6 +7,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record PaymentOnlineProperties(
         @DefaultValue("true") boolean enabled,
         @DefaultValue("15") int sessionExpiryMinutes,
+    @DefaultValue("20") int requestsPerMinute,
         @DefaultValue("http://localhost:3000/checkout") String mockCheckoutBaseUrl,
         @DefaultValue("momo://app?action=pay&orderCode={orderCode}&amount={amount}") String walletDeepLinkTemplate,
         String vietQrBankCode,
@@ -16,6 +17,10 @@ public record PaymentOnlineProperties(
     public PaymentOnlineProperties {
         if (sessionExpiryMinutes <= 0) {
             throw new IllegalStateException("APP_PAYMENT_ONLINE_SESSION_EXPIRY_MINUTES must be greater than 0.");
+        }
+
+        if (requestsPerMinute <= 0) {
+            throw new IllegalStateException("APP_PAYMENT_ONLINE_REQUESTS_PER_MINUTE must be greater than 0.");
         }
 
         mockCheckoutBaseUrl = normalize(mockCheckoutBaseUrl, "APP_PAYMENT_ONLINE_MOCK_CHECKOUT_BASE_URL");

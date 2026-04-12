@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CreditCard, Minus, Plus, ShieldCheck, Trash2, Truck } from "@/components/icons";
+import { Check, CreditCard, Minus, Plus, ShieldCheck, Trash2, Truck } from "@/components/icons";
 import { toast } from "sonner";
 
 import { useAuth } from "@/components/auth-provider";
@@ -18,9 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  PAYMENT_METHOD_LABELS,
-  confirmMockPayment,
   createPaymentSession,
+  PAYMENT_METHOD_LABELS,
   getMyAddresses,
   getPromotions,
   getShippingMethods,
@@ -28,7 +28,7 @@ import {
 } from "@/lib/api";
 import { formatVnd } from "@/lib/currency";
 import { fallbackPromotions, fallbackShippingMethods, isStorefrontDemoFallbackEnabled } from "@/lib/storefront-fallback";
-import type { PaymentMethod, PaymentSessionData, Promotion, ShippingMethod, UserAddress } from "@/lib/types";
+import type { Promotion, ShippingMethod, UserAddress } from "@/lib/types";
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Vui lòng nhập họ tên."),
@@ -37,29 +37,26 @@ const checkoutSchema = z.object({
   city: z.string().min(2, "Vui lòng nhập tỉnh/thành."),
   addressLine: z.string().min(8, "Vui lòng nhập địa chỉ đầy đủ."),
   notes: z.string().max(500, "Ghi chú quá dài.").optional(),
-  paymentMethod: z.enum(["COD", "BANK_TRANSFER", "CARD", "BANK_QR", "EWALLET"]),
+  paymentMethod: z.enum(["COD", "BANK_QR"]).optional(),
   shippingMethodSlug: z.string().optional(),
   promotionCode: z.string().optional(),
+}).refine((values) => values.paymentMethod !== undefined, {
+  path: ["paymentMethod"],
+  message: "Vui lòng chọn phương thức thanh toán.",
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 type CheckoutDependencyMode = "loading" | "live" | "demo-fallback" | "unavailable";
-
-const ONLINE_PAYMENT_METHODS: PaymentMethod[] = ["CARD", "BANK_QR", "EWALLET"];
-
-function isOnlinePaymentMethod(method: PaymentMethod): boolean {
-  return ONLINE_PAYMENT_METHODS.includes(method);
-}
+const USER_FACING_PAYMENT_METHODS = ["COD", "BANK_QR"] as const;
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const { items, subtotal, clearCart, removeItem, updateQuantity } = useCart();
   const { user, isAuthenticated, isAdmin, isReady, getAccessToken } = useAuth();
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [orderCode, setOrderCode] = useState<string | null>(null);
-  const [paymentSession, setPaymentSession] = useState<PaymentSessionData | null>(null);
-  const [isPaymentConfirming, setIsPaymentConfirming] = useState(false);
   const [checkoutDependencyMode, setCheckoutDependencyMode] = useState<CheckoutDependencyMode>("loading");
   const [isPending, startTransition] = useTransition();
   const savedAddresses = isAuthenticated ? addresses : [];
@@ -73,7 +70,6 @@ export default function CheckoutPage() {
       city: "",
       addressLine: "",
       notes: "",
-      paymentMethod: "COD",
       shippingMethodSlug: "",
       promotionCode: "",
     },
@@ -191,6 +187,11 @@ export default function CheckoutPage() {
 
   async function onSubmit(values: CheckoutFormValues) {
     if (items.length === 0) return;
+    const selectedPaymentMethod = values.paymentMethod;
+    if (!selectedPaymentMethod) {
+      toast.error("Vui lòng chọn phương thức thanh toán trước khi đặt hàng.");
+      return;
+    }
     if (isAdmin) {
       toast.error("Tài khoản quản trị không được phép mua hàng.");
       return;
@@ -208,7 +209,7 @@ export default function CheckoutPage() {
             {
               ...values,
               notes: values.notes?.trim() ? values.notes : undefined,
-              paymentMethod: values.paymentMethod as PaymentMethod,
+              paymentMethod: selectedPaymentMethod,
               shippingMethodSlug: values.shippingMethodSlug || undefined,
               promotionCode: values.promotionCode || undefined,
               items: items.map((item) => ({
@@ -220,28 +221,36 @@ export default function CheckoutPage() {
             token,
           );
 
-          setOrderCode(response.orderCode);
-          setPaymentSession(null);
           clearCart();
 
-          if (isOnlinePaymentMethod(values.paymentMethod as PaymentMethod)) {
-            try {
-              const session = await createPaymentSession({ orderCode: response.orderCode });
-              setPaymentSession(session);
-              toast.success("Đơn hàng đã tạo. Tiếp tục hoàn tất thanh toán online.", {
-                description: `Mã đơn ${response.orderCode} đang chờ xác nhận thanh toán.`,
-              });
-            } catch (sessionError) {
-              toast.warning("Đơn hàng đã tạo nhưng chưa khởi tạo được phiên thanh toán online.", {
-                description: sessionError instanceof Error ? sessionError.message : `Mã đơn ${response.orderCode}.`,
-              });
-            }
+          if (selectedPaymentMethod === "COD") {
+            setOrderCode(response.orderCode);
+            toast.success("Đặt hàng thành công.", {
+              description: `Mã đơn của bạn là ${response.orderCode}.`,
+            });
             return;
           }
 
-          toast.success("Đặt hàng thành công.", {
-            description: `Mã đơn của bạn là ${response.orderCode}.`,
+          let referenceToken: string | null = null;
+          try {
+            const paymentSession = await createPaymentSession({ orderCode: response.orderCode });
+            referenceToken = paymentSession.referenceToken;
+          } catch {
+            toast.warning("Đơn đã tạo nhưng chưa mở được phiên thanh toán.", {
+              description: "Bạn sẽ được chuyển tới màn hình thanh toán để thử tạo lại phiên.",
+            });
+          }
+
+          const searchParams = new URLSearchParams({ orderCode: response.orderCode });
+          if (referenceToken) {
+            searchParams.set("referenceToken", referenceToken);
+          }
+
+          toast.message("Đơn đang chờ thanh toán.", {
+            description: `Hoàn tất thanh toán VNPay để xác nhận mã đơn ${response.orderCode}.`,
           });
+
+          router.push(`/checkout/payment?${searchParams.toString()}`);
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "Không thể tạo đơn hàng lúc này.");
         }
@@ -249,35 +258,13 @@ export default function CheckoutPage() {
     });
   }
 
-  async function handleConfirmMockPayment() {
-    if (!paymentSession?.canConfirmMock) {
-      return;
-    }
-
-    setIsPaymentConfirming(true);
-    try {
-      const updatedSession = await confirmMockPayment({
-        orderCode: paymentSession.orderCode,
-        referenceToken: paymentSession.referenceToken,
-      });
-      setPaymentSession(updatedSession);
-      toast.success("Đã xác nhận thanh toán online.", {
-        description: `Đơn ${updatedSession.orderCode} đã chuyển sang trạng thái đã thanh toán.`,
-      });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Không thể xác nhận thanh toán.");
-    } finally {
-      setIsPaymentConfirming(false);
-    }
-  }
-
   if (isReady && isAuthenticated && isAdmin) {
     return (
       <div className="section-shell flex min-h-[60vh] items-center py-20">
         <div className="surface-strong mx-auto max-w-4xl rounded-[2.4rem] px-8 py-12 text-center">
           <BrandMark compact className="justify-center" />
-          <div className="mt-6 font-display text-4xl font-semibold text-[var(--foreground-hero)]">Tài khoản quản trị không hỗ trợ mua hàng</div>
-          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+          <div className="mt-6 font-display text-4xl font-semibold text-(--foreground-hero)">Tài khoản quản trị không hỗ trợ mua hàng</div>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-(--muted)">
             Vai trò ADMIN chỉ dùng cho vận hành. Vui lòng dùng tài khoản khách hàng để đặt đơn hoặc quay lại khu quản trị.
           </p>
           <div className="mt-6 flex justify-center gap-3">
@@ -298,8 +285,8 @@ export default function CheckoutPage() {
       <div className="section-shell flex min-h-[60vh] items-center py-20">
         <div className="surface-strong mx-auto max-w-4xl rounded-[2.4rem] px-8 py-12 text-center">
           <BrandMark compact className="justify-center" />
-          <div className="mt-6 font-display text-4xl font-semibold text-[var(--foreground-hero)]">Giỏ hàng đang trống</div>
-          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+          <div className="mt-6 font-display text-4xl font-semibold text-(--foreground-hero)">Giỏ hàng đang trống</div>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-(--muted)">
             Chọn một vài đôi trong catalog, sau đó quay lại đây để hoàn tất checkout bằng shipping method, promotion và address đã lưu.
           </p>
           <div className="mt-6 flex justify-center gap-3">
@@ -327,7 +314,7 @@ export default function CheckoutPage() {
               <h1 className="display-hero max-w-4xl">
                 Hoàn tất đơn hàng bằng một luồng rõ, nhẹ và đáng tin.
               </h1>
-              <p className="max-w-2xl text-base leading-8 text-[var(--muted-strong)]">
+              <p className="max-w-2xl text-base leading-8 text-(--muted-strong)">
                 Checkout mới tách giỏ hàng, địa chỉ, shipping method và promotion thành các lớp dễ quét. Đây là nơi glass phải hỗ trợ clarity, không che nó đi.
               </p>
             </div>
@@ -347,9 +334,9 @@ export default function CheckoutPage() {
                 ["Lớp giao hàng", "Hiển thị ETA và phí ship ngay trong decision zone."],
                 ["Contract ưu đãi", "Ưu đãi chạy qua API riêng, không hard-code trong UI."],
               ].map(([title, copy]) => (
-                <div key={title} className="rounded-[1.6rem] border border-[var(--line)] bg-white/62 p-4">
-                  <div className="font-semibold text-[var(--foreground-hero)]">{title}</div>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{copy}</p>
+                <div key={title} className="rounded-[1.6rem] border border-(--line) bg-white/62 p-4">
+                  <div className="font-semibold text-(--foreground-hero)">{title}</div>
+                  <p className="mt-2 text-sm leading-6 text-(--muted)">{copy}</p>
                 </div>
               ))}
             </div>
@@ -359,7 +346,7 @@ export default function CheckoutPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="utility-label">Tóm tắt</div>
-                <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">
+                <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">
                   {formatVnd(total)}
                 </div>
               </div>
@@ -368,7 +355,7 @@ export default function CheckoutPage() {
 
             <div className="mt-6 space-y-4">
               {items.map((item) => (
-                <div key={`${item.shoeSlug}-${item.sizeLabel}`} className="rounded-[1.6rem] border border-[var(--line)] bg-white/62 p-4">
+                <div key={`${item.shoeSlug}-${item.sizeLabel}`} className="rounded-[1.6rem] border border-(--line) bg-white/62 p-4">
                   <div className="flex gap-4">
                     <Image
                       src={item.primaryImage}
@@ -380,8 +367,8 @@ export default function CheckoutPage() {
                     />
 
                     <div className="min-w-0 flex-1">
-                      <div className="font-display text-xl font-semibold text-[var(--foreground-hero)]">{item.shoeName}</div>
-                      <div className="mt-1 text-sm text-[var(--muted)]">
+                      <div className="font-display text-xl font-semibold text-(--foreground-hero)">{item.shoeName}</div>
+                      <div className="mt-1 text-sm text-(--muted)">
                         {item.brand} • Size {item.sizeLabel}
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -394,7 +381,7 @@ export default function CheckoutPage() {
                           >
                             <Minus />
                           </Button>
-                          <div className="flex h-10 min-w-12 items-center justify-center rounded-2xl border border-[var(--line)] bg-white/70 px-3 text-sm font-semibold text-[var(--foreground-hero)]">
+                          <div className="flex h-10 min-w-12 items-center justify-center rounded-2xl border border-(--line) bg-white/70 px-3 text-sm font-semibold text-(--foreground-hero)">
                             {item.quantity}
                           </div>
                           <Button
@@ -406,12 +393,12 @@ export default function CheckoutPage() {
                             <Plus />
                           </Button>
                         </div>
-                        <div className="text-sm text-[var(--muted)]">{formatVnd(item.price)} / đôi</div>
+                        <div className="text-sm text-(--muted)">{formatVnd(item.price)} / đôi</div>
                       </div>
                     </div>
 
                     <div className="flex flex-col items-end justify-between gap-4">
-                      <div className="text-right font-semibold text-[var(--foreground-hero)]">
+                      <div className="text-right font-semibold text-(--foreground-hero)">
                         {formatVnd(item.price * item.quantity)}
                       </div>
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(item.shoeSlug, item.sizeLabel)}>
@@ -423,20 +410,20 @@ export default function CheckoutPage() {
               ))}
             </div>
 
-            <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5">
-              <div className="flex items-center justify-between text-sm text-[var(--muted)]">
+            <div className="mt-6 rounded-[1.7rem] border border-(--line) bg-white/58 p-5">
+              <div className="flex items-center justify-between text-sm text-(--muted)">
                 <span>Tạm tính</span>
                 <span>{formatVnd(subtotal)}</span>
               </div>
-              <div className="mt-3 flex items-center justify-between text-sm text-[var(--muted)]">
+              <div className="mt-3 flex items-center justify-between text-sm text-(--muted)">
                 <span>Phí giao hàng</span>
                 <span>{formatVnd(shippingFee)}</span>
               </div>
-              <div className="mt-3 flex items-center justify-between text-sm text-[var(--muted)]">
+              <div className="mt-3 flex items-center justify-between text-sm text-(--muted)">
                 <span>Giảm giá</span>
                 <span>-{formatVnd(discountAmount)}</span>
               </div>
-              <div className="mt-4 flex items-center justify-between text-lg font-semibold text-[var(--foreground-hero)]">
+              <div className="mt-4 flex items-center justify-between text-lg font-semibold text-(--foreground-hero)">
                 <span>Tổng thanh toán</span>
                 <span>{formatVnd(total)}</span>
               </div>
@@ -449,7 +436,7 @@ export default function CheckoutPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="utility-label">Sổ địa chỉ</div>
-                <div className="mt-2 font-display text-3xl font-semibold text-[var(--foreground-hero)]">
+                <div className="mt-2 font-display text-3xl font-semibold text-(--foreground-hero)">
                   {isAuthenticated ? "Địa chỉ đã lưu" : "Checkout của khách"}
                 </div>
               </div>
@@ -468,64 +455,64 @@ export default function CheckoutPage() {
                       form.setValue("addressLine", address.addressLine);
                       form.setValue("city", address.city);
                     }}
-                    className="rounded-[1.7rem] border border-[var(--line)] bg-white/62 p-4 text-left transition hover:-translate-y-0.5"
+                    className="rounded-[1.7rem] border border-(--line) bg-white/62 p-4 text-left transition hover:-translate-y-0.5"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div className="font-semibold text-[var(--foreground-hero)]">{address.label}</div>
+                      <div className="font-semibold text-(--foreground-hero)">{address.label}</div>
                       {address.defaultAddress ? <Badge>Mặc định</Badge> : null}
                     </div>
-                    <div className="mt-2 text-sm text-[var(--muted)]">
+                    <div className="mt-2 text-sm text-(--muted)">
                       {address.recipientName} • {address.phone}
                     </div>
-                    <div className="mt-1 text-sm leading-6 text-[var(--muted)]">
+                    <div className="mt-1 text-sm leading-6 text-(--muted)">
                       {address.addressLine}, {address.city}
                     </div>
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5 text-sm leading-7 text-[var(--muted)]">
+              <div className="mt-6 rounded-[1.7rem] border border-(--line) bg-white/58 p-5 text-sm leading-7 text-(--muted)">
                 {isAuthenticated
                   ? "Chưa có địa chỉ nào được lưu. Bạn vẫn có thể hoàn tất đơn bằng cách nhập tay ở form bên phải."
                   : "Bạn có thể đặt hàng như khách. Đăng nhập hoặc đăng ký để lưu địa chỉ cho những lần mua sau."}
               </div>
             )}
 
-            <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5">
-              <div className="text-sm font-semibold text-[var(--foreground-hero)]">Phương thức giao hàng</div>
+            <div className="mt-6 rounded-[1.7rem] border border-(--line) bg-white/58 p-5">
+              <div className="text-sm font-semibold text-(--foreground-hero)">Phương thức giao hàng</div>
               {shippingMethods.length > 0 ? (
                 <div className="mt-4 grid gap-3">
                   {shippingMethods.map((method) => (
                     <label
                       key={method.id}
-                      className={`rounded-[1.5rem] border p-4 transition ${
+                      className={`rounded-3xl border p-4 transition ${
                         selectedShipping?.slug === method.slug
-                          ? "border-[var(--line-strong)] bg-[linear-gradient(135deg,rgba(255,255,255,0.82),rgba(244,248,255,0.7))]"
-                          : "border-[var(--line)] bg-white/62"
+                          ? "border-(--line-strong) bg-[linear-gradient(135deg,rgba(255,255,255,0.82),rgba(244,248,255,0.7))]"
+                          : "border-(--line) bg-white/62"
                       }`}
                     >
                       <input type="radio" value={method.slug} {...form.register("shippingMethodSlug")} className="sr-only" />
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="font-semibold text-[var(--foreground-hero)]">{method.name}</div>
-                          <div className="mt-1 text-sm leading-6 text-[var(--muted)]">{method.description}</div>
-                          <div className="mt-2 text-sm text-[var(--muted)]">{method.etaLabel}</div>
+                          <div className="font-semibold text-(--foreground-hero)">{method.name}</div>
+                          <div className="mt-1 text-sm leading-6 text-(--muted)">{method.description}</div>
+                          <div className="mt-2 text-sm text-(--muted)">{method.etaLabel}</div>
                         </div>
-                        <div className="text-sm font-semibold text-[var(--foreground-hero)]">{formatVnd(method.fee)}</div>
+                        <div className="text-sm font-semibold text-(--foreground-hero)">{formatVnd(method.fee)}</div>
                       </div>
                     </label>
                   ))}
                 </div>
               ) : (
-                <div className="mt-4 rounded-[1.5rem] border border-dashed border-[var(--line)] bg-white/62 p-4 text-sm leading-7 text-[var(--muted)]">
+                <div className="mt-4 rounded-3xl border border-dashed border-(--line) bg-white/62 p-4 text-sm leading-7 text-(--muted)">
                   Chưa thể tải phương thức giao hàng từ backend. Khi dữ liệu sẵn sàng, các lựa chọn giao hàng sẽ xuất hiện tại đây.
                 </div>
               )}
             </div>
 
             {promotions.length > 0 ? (
-              <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5">
-                <div className="text-sm font-semibold text-[var(--foreground-hero)]">Ưu đãi</div>
+              <div className="mt-6 rounded-[1.7rem] border border-(--line) bg-white/58 p-5">
+                <div className="text-sm font-semibold text-(--foreground-hero)">Ưu đãi</div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {promotions.map((promotion) => (
                     <button
@@ -534,8 +521,8 @@ export default function CheckoutPage() {
                       onClick={() => form.setValue("promotionCode", promotion.code)}
                       className={`rounded-full border px-4 py-2 text-sm transition ${
                         selectedPromotion?.code === promotion.code
-                          ? "border-transparent bg-[linear-gradient(135deg,var(--brand-gold),#efc57e,var(--brand-rose))] text-[var(--brand-ink)]"
-                          : "border-[var(--line)] bg-white/70 text-[var(--foreground)]"
+                          ? "border-transparent bg-[linear-gradient(135deg,var(--brand-gold),#efc57e,var(--brand-rose))] text-(--brand-ink)"
+                          : "border-(--line) bg-white/70 text-foreground"
                       }`}
                     >
                       {promotion.code}
@@ -543,9 +530,9 @@ export default function CheckoutPage() {
                   ))}
                 </div>
                 {selectedPromotion ? (
-                  <div className="mt-4 rounded-[1.4rem] border border-[var(--line)] bg-white/70 p-4">
-                    <div className="font-medium text-[var(--foreground-hero)]">{selectedPromotion.title}</div>
-                    <div className="mt-1 text-sm leading-6 text-[var(--muted)]">{selectedPromotion.description}</div>
+                  <div className="mt-4 rounded-[1.4rem] border border-(--line) bg-white/70 p-4">
+                    <div className="font-medium text-(--foreground-hero)">{selectedPromotion.title}</div>
+                    <div className="mt-1 text-sm leading-6 text-(--muted)">{selectedPromotion.description}</div>
                     <div className="mt-3">
                       <Badge variant="warning">{selectedPromotion.discountLabel}</Badge>
                     </div>
@@ -553,7 +540,7 @@ export default function CheckoutPage() {
                 ) : null}
               </div>
             ) : checkoutIsDegraded ? (
-              <div className="mt-6 rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-5 text-sm leading-7 text-[var(--muted)]">
+              <div className="mt-6 rounded-[1.7rem] border border-(--line) bg-white/58 p-5 text-sm leading-7 text-(--muted)">
                 Promotion đang tạm ẩn vì frontend chưa nhận được contract ưu đãi từ backend. Khi hệ thống phục hồi, khu vực này sẽ hiển thị lại bình thường.
               </div>
             ) : null}
@@ -608,127 +595,88 @@ export default function CheckoutPage() {
                 ) : null}
               </div>
 
-              <div className="space-y-3">
-                <div className="text-sm font-semibold text-[var(--foreground-hero)]">Phương thức thanh toán</div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {(Object.entries(PAYMENT_METHOD_LABELS) as [PaymentMethod, string][]).map(([value, label]) => (
-                    <label
-                      key={value}
-                      className={`rounded-[1.5rem] border p-4 text-sm transition ${
-                        paymentMethod === value
-                          ? "border-[var(--line-strong)] bg-[linear-gradient(135deg,rgba(255,255,255,0.86),rgba(244,248,255,0.74))]"
-                          : "border-[var(--line)] bg-white/62"
-                      }`}
-                    >
-                      <input type="radio" value={value} {...form.register("paymentMethod")} className="sr-only" />
-                      <div className="flex items-center gap-2 font-medium text-[var(--foreground-hero)]">
-                        {value === "COD" ? <Truck /> : <CreditCard />}
-                        {label}
-                      </div>
-                      <div className="mt-2 text-[var(--muted)]">
-                        {value === "COD" && "COD vẫn có chỗ đứng, nhưng được trình bày như một option chính thức chứ không phải note phụ."}
-                        {value === "BANK_TRANSFER" && "Chuyển khoản thủ công phù hợp khi đối soát theo batch với fulfillment."}
-                        {value === "CARD" && "Thanh toán thẻ online qua phiên checkout bảo mật, phù hợp luồng mua nhanh."}
-                        {value === "BANK_QR" && "Quét QR ngân hàng để chuyển khoản tức thì với nội dung đối soát tự động."}
-                        {value === "EWALLET" && "Thanh toán qua ví điện tử, giữ trải nghiệm mobile-first cho khách hàng."}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-semibold text-(--foreground-hero)">Phương thức thanh toán</legend>
+                <div className="grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="Phương thức thanh toán">
+                  {USER_FACING_PAYMENT_METHODS.map((value) => {
+                    const isSelected = paymentMethod === value;
 
-              <div className="rounded-[1.7rem] border border-[var(--line)] bg-white/58 p-4 text-sm text-[var(--muted)]">
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        onClick={() => {
+                          form.setValue("paymentMethod", value, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                        className={`group relative rounded-3xl border p-4 text-left text-sm transition focus-visible:ring-2 focus-visible:ring-(--ring) ${
+                          isSelected
+                            ? "border-(--line-strong) bg-[linear-gradient(135deg,rgba(255,255,255,0.93),rgba(232,244,255,0.86))] shadow-[0_12px_26px_rgba(77,114,160,0.16)]"
+                            : "border-(--line) bg-white/62 hover:bg-white/78"
+                        }`}
+                      >
+                        <div
+                          className={`absolute right-4 top-4 flex h-5 w-5 items-center justify-center rounded-full border transition ${
+                            isSelected
+                              ? "border-(--accent) bg-(--accent) text-white"
+                              : "border-(--line-strong) bg-white/86 text-transparent"
+                          }`}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </div>
+
+                        <div className="flex items-center gap-2 pr-7 font-medium text-(--foreground-hero)">
+                          {value === "COD" ? <Truck /> : <CreditCard />}
+                          {PAYMENT_METHOD_LABELS[value]}
+                        </div>
+                        <div className="mt-2 text-(--muted)">
+                          {value === "COD" && "COD vẫn có chỗ đứng, nhưng được trình bày như một option chính thức chứ không phải note phụ."}
+                          {value === "BANK_QR" && "Thanh toán qua cổng VNPay. Sau khi xác nhận đơn, hệ thống sẽ chuyển sang màn hình theo dõi thanh toán realtime."}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.formState.errors.paymentMethod ? (
+                  <div className="text-sm text-rose-500">{form.formState.errors.paymentMethod.message}</div>
+                ) : null}
+              </fieldset>
+
+              <div className="rounded-[1.7rem] border border-(--line) bg-white/58 p-4 text-sm text-(--muted)">
                 <div className="flex items-start gap-3">
-                  <ShieldCheck className="mt-0.5 text-[var(--accent)]" />
+                  <ShieldCheck className="mt-0.5 text-(--accent)" />
                   <span>Checkout này được thiết kế theo operational glass: surface sáng hơn, blur nhẹ hơn và mọi thông tin quan trọng phải đọc được ngay.</span>
                 </div>
               </div>
 
               {orderCode ? (
-                <div className="rounded-[1.5rem] border border-emerald-300/40 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                <div className="rounded-3xl border border-emerald-300/40 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                   Đơn hàng đã được tạo thành công. Mã đơn: <strong>{orderCode}</strong>.
                 </div>
               ) : null}
 
-              {paymentSession ? (
-                <div className="rounded-[1.5rem] border border-[var(--line)] bg-white/72 px-4 py-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.18em] text-[var(--foreground-dim)]">Phiên thanh toán online</div>
-                      <div className="mt-1 font-semibold text-[var(--foreground-hero)]">
-                        {PAYMENT_METHOD_LABELS[paymentSession.method]} • {formatVnd(paymentSession.amount)}
-                      </div>
-                    </div>
-                    <Badge variant={paymentSession.status === "PAID" ? "success" : "warning"}>
-                      {paymentSession.status === "PAID" ? "Đã thanh toán" : "Đang chờ thanh toán"}
-                    </Badge>
-                  </div>
-
-                  {paymentSession.instruction ? (
-                    <div className="mt-3 text-sm leading-7 text-[var(--muted)]">{paymentSession.instruction}</div>
-                  ) : null}
-
-                  {paymentSession.qrImageUrl ? (
-                    <div className="mt-4">
-                      <Image
-                        src={paymentSession.qrImageUrl}
-                        alt="Mã QR thanh toán"
-                        width={220}
-                        height={220}
-                        className="rounded-2xl border border-[var(--line)] bg-white p-2"
-                      />
-                    </div>
-                  ) : null}
-
-                  {paymentSession.qrPayload ? (
-                    <div className="mt-3 rounded-xl border border-[var(--line)] bg-white/70 px-3 py-2 text-xs text-[var(--foreground-dim)]">
-                      Nội dung chuyển khoản: {paymentSession.qrPayload}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {paymentSession.checkoutUrl ? (
-                      <Button asChild type="button" variant="secondary" size="sm">
-                        <a href={paymentSession.checkoutUrl} target="_blank" rel="noreferrer">
-                          Mở trang thanh toán
-                        </a>
-                      </Button>
-                    ) : null}
-
-                    {paymentSession.walletDeepLink ? (
-                      <Button asChild type="button" variant="secondary" size="sm">
-                        <a href={paymentSession.walletDeepLink} target="_blank" rel="noreferrer">
-                          Mở ứng dụng ví
-                        </a>
-                      </Button>
-                    ) : null}
-
-                    {paymentSession.canConfirmMock ? (
-                      <Button type="button" size="sm" disabled={isPaymentConfirming} onClick={() => void handleConfirmMockPayment()}>
-                        {isPaymentConfirming ? "Đang xác nhận..." : "Tôi đã thanh toán"}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
               {checkoutGuardCopy ? (
-                <div className="rounded-[1.5rem] border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm leading-7 text-amber-950">
+                <div className="rounded-3xl border border-amber-300/50 bg-amber-50/80 px-4 py-3 text-sm leading-7 text-amber-950">
                   {checkoutGuardCopy}
                 </div>
               ) : null}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {!isAuthenticated ? (
-                  <div className="text-sm text-[var(--muted)]">
+                  <div className="text-sm text-(--muted)">
                     Muốn lưu lịch sử mua và địa chỉ?{" "}
-                    <Link href="/dang-nhap" className="text-[var(--foreground-hero)] underline decoration-[var(--line-strong)] underline-offset-4">
+                    <Link href="/dang-nhap" className="text-(--foreground-hero) underline decoration-(--line-strong) underline-offset-4">
                       Đăng nhập ngay
                     </Link>
                     .
                   </div>
                 ) : (
-                  <div className="text-sm text-[var(--muted)]">Đơn này sẽ xuất hiện cùng địa chỉ và lịch sử mua trong khu tài khoản.</div>
+                  <div className="text-sm text-(--muted)">Đơn này sẽ xuất hiện cùng địa chỉ và lịch sử mua trong khu tài khoản.</div>
                 )}
 
                 <Button type="submit" disabled={isPending || !isCheckoutReadyForSubmit}>
@@ -737,7 +685,9 @@ export default function CheckoutPage() {
                     : checkoutDependencyMode === "loading"
                       ? "Đang tải phương thức..."
                       : isCheckoutReadyForSubmit
-                        ? "Xác nhận đặt hàng"
+                        ? paymentMethod === "BANK_QR"
+                          ? "Tiếp tục tới thanh toán"
+                          : "Xác nhận đặt hàng"
                         : "Tạm khóa xác nhận đơn"}
                 </Button>
               </div>
@@ -748,3 +698,4 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
