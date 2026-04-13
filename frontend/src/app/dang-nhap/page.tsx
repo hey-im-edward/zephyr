@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import { ArrowRight, CircleUserRound, LockKeyhole, Package } from "@/components/
 import { toast } from "sonner";
 
 import { BrandMark } from "@/components/brand-mark";
+import { GoogleLoginButton } from "@/components/google-login-button";
 import { useAuth } from "@/components/auth-provider";
 import { MotionReveal } from "@/components/motion-reveal";
 import { Badge } from "@/components/ui/badge";
@@ -46,10 +47,11 @@ const bullets = [
 
 const coverImage =
   "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1600&q=80";
+const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loginAction, isAuthenticated, isReady, user } = useAuth();
+  const { loginAction, googleLoginAction, isAuthenticated, isReady, user } = useAuth();
   const [isPending, startTransition] = useTransition();
   const redirect = useMemo(
     () => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("redirect")),
@@ -81,6 +83,23 @@ export default function LoginPage() {
         });
     });
   }
+
+  const onGoogleCredential = useCallback((idToken: string) => {
+    startTransition(() => {
+      void googleLoginAction({ idToken })
+        .then((session) => {
+          toast.success("Đăng nhập Google thành công.");
+          router.push(redirect ?? (session.user.role === "ADMIN" ? "/admin" : "/tai-khoan"));
+        })
+        .catch((error) => {
+          toast.error(error instanceof Error ? error.message : "Đăng nhập Google thất bại.");
+        });
+    });
+  }, [googleLoginAction, redirect, router]);
+
+  const onGoogleButtonError = useCallback((message: string) => {
+    toast.error(message);
+  }, []);
 
   return (
     <div className="section-shell py-10 md:py-14">
@@ -158,6 +177,27 @@ export default function LoginPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="rounded-[1.2rem] border border-white/78 bg-white/28 p-4">
+                <div className="text-xs uppercase tracking-[0.24em] text-[var(--foreground-dim)]">Google Sign-In</div>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                  Dùng tài khoản Google để vào nhanh nếu email đã được xác minh và khớp cấu hình bảo mật của hệ thống.
+                </p>
+                <div className="mt-4">
+                  <GoogleLoginButton
+                    clientId={googleClientId}
+                    disabled={isPending}
+                    onCredential={onGoogleCredential}
+                    onError={onGoogleButtonError}
+                  />
+                </div>
+              </div>
+
+              <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-[0.24em] text-[var(--foreground-dim)]">
+                <span className="h-px flex-1 bg-white/65" />
+                <span>Hoặc đăng nhập bằng email</span>
+                <span className="h-px flex-1 bg-white/65" />
+              </div>
+
               <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>

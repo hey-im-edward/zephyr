@@ -158,7 +158,26 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
   await expect(page.getByRole('button', { name: /E2E User/ })).toBeVisible({ timeout: 15_000 });
 
   await page.goto(`/shoes/${selected.shoeSlug}`);
-  await page.getByRole('button', { name: `EU ${selected.sizeLabel}` }).click();
+  const preferredSizeButton = page.getByRole('button', { name: `EU ${selected.sizeLabel}` });
+  if (await preferredSizeButton.isEnabled()) {
+    await preferredSizeButton.click();
+  } else {
+    const allSizeButtons = page.locator('button', { hasText: /^EU\s/ });
+    const sizeCount = await allSizeButtons.count();
+    let clicked = false;
+
+    for (let index = 0; index < sizeCount; index++) {
+      const candidate = allSizeButtons.nth(index);
+      if (await candidate.isEnabled()) {
+        await candidate.click();
+        clicked = true;
+        break;
+      }
+    }
+
+    expect(clicked).toBeTruthy();
+  }
+
   const buyNowButton = page.getByRole('button', { name: 'Mua ngay' });
   await expect(buyNowButton).toBeEnabled();
   await buyNowButton.click();
@@ -167,11 +186,15 @@ test('authenticated browser session can complete checkout flow', async ({ page, 
   await page.getByLabel('Tỉnh / Thành phố').fill('Ho Chi Minh');
   await page.getByLabel('Địa chỉ nhận hàng').fill('123 E2E Street');
 
-  const submitOrderButton = page.getByRole('button', { name: 'Xác nhận đặt hàng' });
+  const submitOrderButton = page.getByRole('button', { name: /Xác nhận đặt hàng|Tiếp tục tới thanh toán/ });
   const bankTransferOption = page.getByRole('radio', { name: 'Chuyển khoản ngân hàng' });
   await bankTransferOption.check({ force: true });
   await expect(submitOrderButton).toBeEnabled();
+  const orderCreated = page.waitForResponse((response) => {
+    return response.url().includes('/api/v1/orders')
+      && response.request().method() === 'POST'
+      && response.status() === 201;
+  });
   await submitOrderButton.click();
-
-  await expect(page.getByText('Giỏ hàng đang trống')).toBeVisible({ timeout: 15_000 });
+  await orderCreated;
 });

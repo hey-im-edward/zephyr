@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -27,7 +29,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.webbanpc.shoestore.common.UnauthorizedException;
 import com.webbanpc.shoestore.user.UserAccount;
+import com.webbanpc.shoestore.user.AuthProvider;
 import com.webbanpc.shoestore.user.UserRepository;
 import com.webbanpc.shoestore.user.UserRole;
 
@@ -49,6 +53,9 @@ class AuthServiceTests {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private GoogleTokenVerifier googleTokenVerifier;
+
     private AuthService authService;
 
     @BeforeEach
@@ -59,7 +66,8 @@ class AuthServiceTests {
                 passwordEncoder,
                 authenticationManager,
                 jwtService,
-                new JwtProperties("0123456789abcdef0123456789abcdef", 15, 30));
+                new JwtProperties("0123456789abcdef0123456789abcdef", 15, 30),
+                googleTokenVerifier);
     }
 
     @Test
@@ -102,6 +110,78 @@ class AuthServiceTests {
         assertEquals("access-token", response.accessToken());
         assertNotNull(response.refreshToken());
         assertEquals("shopper@zephyr.vn", response.user().email());
+    }
+
+    @Test
+    void shouldLoginExistingUserWithGoogle() {
+        UserAccount user = userAccount(7L, "existing@zephyr.vn", "password-hash");
+        when(googleTokenVerifier.verify("google-token"))
+                .thenReturn(new GoogleIdentity("google-sub-1", "existing@zephyr.vn", "Existing User"));
+        when(userRepository.findByAuthProviderAndAuthProviderSubject(AuthProvider.GOOGLE, "google-sub-1"))
+            .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("existing@zephyr.vn")).thenReturn(Optional.of(user));
+        when(userRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jwtService.generateAccessToken(user)).thenReturn(
+                new JwtService.TokenPayload("google-access-token", LocalDateTime.of(2030, 1, 1, 0, 15)));
+
+        AuthResponse response = authService.loginWithGoogle("google-token");
+
+        assertEquals("google-access-token", response.accessToken());
+        assertEquals("existing@zephyr.vn", response.user().email());
+        assertEquals(AuthProvider.GOOGLE, user.getAuthProvider());
+        assertEquals("google-sub-1", user.getAuthProviderSubject());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void shouldCreateNewUserWhenGoogleEmailNotFound() {
+        when(googleTokenVerifier.verify("new-google-token"))
+                .thenReturn(new GoogleIdentity("google-sub-2", "new-user@zephyr.vn", "New Google User"));
+        when(userRepository.findByAuthProviderAndAuthProviderSubject(AuthProvider.GOOGLE, "google-sub-2"))
+            .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("new-user@zephyr.vn")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("generated-hash");
+        when(userRepository.save(any(UserAccount.class))).thenAnswer(invocation -> {
+            UserAccount saved = invocation.getArgument(0);
+            saved.setId(99L);
+            return saved;
+        });
+        when(refreshTokenRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jwtService.generateAccessToken(any(UserAccount.class))).thenReturn(
+                new JwtService.TokenPayload("google-access-token", LocalDateTime.of(2030, 1, 1, 0, 15)));
+
+        AuthResponse response = authService.loginWithGoogle("new-google-token");
+
+        ArgumentCaptor<UserAccount> userCaptor = ArgumentCaptor.forClass(UserAccount.class);
+        verify(userRepository).save(userCaptor.capture());
+
+        UserAccount createdUser = userCaptor.getValue();
+        assertEquals("new-user@zephyr.vn", createdUser.getEmail());
+        assertEquals("New Google User", createdUser.getFullName());
+        assertEquals(AuthProvider.GOOGLE, createdUser.getAuthProvider());
+        assertEquals("google-sub-2", createdUser.getAuthProviderSubject());
+        assertEquals(10, createdUser.getPhone().length());
+        assertEquals(UserRole.USER, createdUser.getRole());
+
+        assertEquals(createdUser.getEmail(), response.user().email());
+        assertEquals("google-access-token", response.accessToken());
+    }
+
+    @Test
+    void shouldRejectGoogleLoginWhenSubjectDoesNotMatchExistingLinkedAccount() {
+        UserAccount user = userAccount(12L, "existing@zephyr.vn", "password-hash");
+        user.setAuthProvider(AuthProvider.GOOGLE);
+        user.setAuthProviderSubject("google-sub-old");
+        when(googleTokenVerifier.verify("google-token"))
+                .thenReturn(new GoogleIdentity("google-sub-new", "existing@zephyr.vn", "Existing User"));
+        when(userRepository.findByAuthProviderAndAuthProviderSubject(AuthProvider.GOOGLE, "google-sub-new"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("existing@zephyr.vn")).thenReturn(Optional.of(user));
+
+        assertThrows(UnauthorizedException.class, () -> authService.loginWithGoogle("google-token"));
+
+        verify(userRepository, never()).save(any(UserAccount.class));
     }
 
     private UserAccount userAccount(Long id, String email, String passwordHash) {

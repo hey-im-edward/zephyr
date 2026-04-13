@@ -22,6 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import com.webbanpc.shoestore.auth.JwtAuthenticationFilter;
 import com.webbanpc.shoestore.auth.JwtProperties;
+import com.webbanpc.shoestore.auth.GoogleAuthProperties;
 import com.webbanpc.shoestore.auth.RefreshCookieProperties;
 import com.webbanpc.shoestore.chatbot.ChatbotProperties;
 import com.webbanpc.shoestore.payment.PaymentOnlineProperties;
@@ -34,6 +35,7 @@ import jakarta.servlet.http.HttpServletResponse;
 @EnableConfigurationProperties({
     AdminProperties.class,
     JwtProperties.class,
+    GoogleAuthProperties.class,
     RefreshCookieProperties.class,
     PaymentOnlineProperties.class,
     VNPayProperties.class,
@@ -59,7 +61,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/chatbot/completions").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/sessions", "/api/v1/payments/mock/confirm").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/payments/sessions/status", "/api/v1/payments/vnpay/return", "/api/v1/payments/vnpay/ipn").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/google", "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/home", "/api/v1/categories", "/api/v1/shoes/**", "/api/v1/catalog", "/api/v1/campaigns", "/api/v1/banner-slots", "/api/v1/collections/**", "/api/v1/promotions", "/api/v1/shipping-methods").permitAll()
                         .anyRequest().denyAll());
