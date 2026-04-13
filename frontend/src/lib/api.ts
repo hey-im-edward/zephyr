@@ -18,6 +18,7 @@ import type {
   CurrentUserResponse,
   ChatbotCompletionRequest,
   ChatbotCompletionResponse,
+  GoogleLoginPayload,
   HomeData,
   LoginPayload,
   MediaAsset,
@@ -289,6 +290,14 @@ export async function getShippingMethods(): Promise<ShippingMethod[]> {
 
 export async function login(payload: LoginPayload): Promise<AuthResponse> {
   return request<AuthResponse>("/auth/login", {
+    method: "POST",
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function googleLogin(payload: GoogleLoginPayload): Promise<AuthResponse> {
+  return request<AuthResponse>("/auth/google", {
     method: "POST",
     credentials: "include",
     body: JSON.stringify(payload),
