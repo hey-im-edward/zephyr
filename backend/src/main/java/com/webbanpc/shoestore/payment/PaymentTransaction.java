@@ -57,7 +57,7 @@ public class PaymentTransaction {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "checkout_url", length = 255)
+    @Column(name = "checkout_url", columnDefinition = "TEXT")
     private String checkoutUrl;
 
     @Column(name = "qr_image_url", length = 255)

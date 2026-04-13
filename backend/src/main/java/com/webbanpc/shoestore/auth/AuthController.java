@@ -40,6 +40,11 @@ public class AuthController {
         return writeSessionCookie(response, authService.login(request));
     }
 
+    @PostMapping("/google")
+    public AuthResponse loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request, HttpServletResponse response) {
+        return writeSessionCookie(response, authService.loginWithGoogle(request.idToken()));
+    }
+
     @PostMapping("/refresh")
     public AuthResponse refresh(
             @RequestBody(required = false) RefreshRequest request,

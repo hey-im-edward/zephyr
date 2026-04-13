@@ -12,11 +12,13 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.webbanpc.shoestore.common.ConflictException;
 import com.webbanpc.shoestore.common.UnauthorizedException;
+import com.webbanpc.shoestore.user.AuthProvider;
 import com.webbanpc.shoestore.user.UserAccount;
 import com.webbanpc.shoestore.user.UserRepository;
 import com.webbanpc.shoestore.user.UserRole;
@@ -25,12 +27,16 @@ import com.webbanpc.shoestore.user.UserRole;
 @Transactional(readOnly = true)
 public class AuthService {
 
+    private static final int FULL_NAME_MAX_LENGTH = 120;
+    private static final int SYNTHETIC_PHONE_LENGTH = 10;
+
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     public AuthService(
             UserRepository userRepository,
@@ -38,13 +44,15 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
             JwtService jwtService,
-            JwtProperties jwtProperties) {
+            JwtProperties jwtProperties,
+            GoogleTokenVerifier googleTokenVerifier) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
         this.jwtProperties = jwtProperties;
+        this.googleTokenVerifier = googleTokenVerifier;
     }
 
     @Transactional
@@ -59,6 +67,7 @@ public class AuthService {
                 .email(email)
                 .phone(request.phone().trim())
                 .passwordHash(passwordEncoder.encode(request.password()))
+            .authProvider(AuthProvider.LOCAL)
                 .role(UserRole.USER)
                 .active(true)
                 .createdAt(LocalDateTime.now())
@@ -79,6 +88,18 @@ public class AuthService {
 
         UserAccount user = Objects.requireNonNull(userRepository.findByEmail(request.email().trim().toLowerCase())
                 .orElseThrow(() -> new UnauthorizedException("Invalid credentials")));
+
+        return issueTokens(user);
+    }
+
+    @Transactional
+    public AuthResponse loginWithGoogle(String idToken) {
+        GoogleIdentity identity = googleTokenVerifier.verify(idToken);
+        UserAccount user = resolveGoogleUser(identity);
+
+        if (!user.isEnabled()) {
+            throw new UnauthorizedException("Account is disabled");
+        }
 
         return issueTokens(user);
     }
@@ -125,6 +146,87 @@ public class AuthService {
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         refreshTokenRepository.revokeAllByUserId(user.getId());
+    }
+
+    private UserAccount resolveGoogleUser(GoogleIdentity identity) {
+        return userRepository.findByAuthProviderAndAuthProviderSubject(AuthProvider.GOOGLE, identity.subject())
+                .orElseGet(() -> upsertGoogleUser(identity));
+    }
+
+    private UserAccount upsertGoogleUser(GoogleIdentity identity) {
+        try {
+            UserAccount existingUser = userRepository.findByEmail(identity.email()).orElse(null);
+            if (existingUser != null) {
+                linkGoogleIdentity(existingUser, identity);
+                return Objects.requireNonNull(userRepository.save(existingUser));
+            }
+
+            return createUserFromGoogleIdentity(identity);
+        } catch (DataIntegrityViolationException exception) {
+            return Objects.requireNonNull(userRepository
+                    .findByAuthProviderAndAuthProviderSubject(AuthProvider.GOOGLE, identity.subject())
+                    .or(() -> userRepository.findByEmail(identity.email()))
+                    .orElseThrow(() -> new ConflictException("Email already exists")));
+        }
+    }
+
+    private void linkGoogleIdentity(UserAccount user, GoogleIdentity identity) {
+        String subject = identity.subject() == null ? "" : identity.subject().trim();
+        if (subject.isEmpty()) {
+            throw new UnauthorizedException("Google token is invalid");
+        }
+
+        String existingSubject = user.getAuthProviderSubject() == null ? "" : user.getAuthProviderSubject().trim();
+        if (!existingSubject.isEmpty() && !existingSubject.equals(subject)) {
+            throw new UnauthorizedException("Google account does not match existing account");
+        }
+
+        user.setAuthProvider(AuthProvider.GOOGLE);
+        user.setAuthProviderSubject(subject);
+        if (user.getPhone() == null || user.getPhone().isBlank()) {
+            user.setPhone(buildSyntheticPhoneFromSubject(subject));
+        }
+    }
+
+    private UserAccount createUserFromGoogleIdentity(GoogleIdentity identity) {
+        UserAccount socialUser = UserAccount.builder()
+                .fullName(resolveFullName(identity.fullName(), identity.email()))
+                .email(identity.email())
+                .phone(buildSyntheticPhoneFromSubject(identity.subject()))
+                .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString() + UUID.randomUUID()))
+                .authProvider(AuthProvider.GOOGLE)
+                .authProviderSubject(identity.subject())
+                .role(UserRole.USER)
+                .active(true)
+                .createdAt(LocalDateTime.now())
+                .build();
+        return Objects.requireNonNull(userRepository.save(Objects.requireNonNull(socialUser)));
+    }
+
+    private String resolveFullName(String candidate, String fallbackEmail) {
+        String normalized = candidate == null ? "" : candidate.trim();
+        if (normalized.isBlank()) {
+            normalized = fallbackEmail;
+        }
+        if (normalized.length() > FULL_NAME_MAX_LENGTH) {
+            return normalized.substring(0, FULL_NAME_MAX_LENGTH);
+        }
+        return normalized;
+    }
+
+    private String buildSyntheticPhoneFromSubject(String subject) {
+        String digest = hash(subject == null ? UUID.randomUUID().toString() : subject);
+        StringBuilder digits = new StringBuilder(SYNTHETIC_PHONE_LENGTH);
+        for (int index = 0; index < digest.length() && digits.length() < SYNTHETIC_PHONE_LENGTH; index++) {
+            char current = digest.charAt(index);
+            if (Character.isDigit(current)) {
+                digits.append(current);
+            }
+        }
+        while (digits.length() < SYNTHETIC_PHONE_LENGTH) {
+            digits.append('0');
+        }
+        return digits.toString();
     }
 
     private AuthResponse issueTokens(UserAccount user) {

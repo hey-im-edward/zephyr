@@ -14,7 +14,7 @@ export type PaymentMethod = "COD" | "BANK_TRANSFER" | "CARD" | "BANK_QR" | "EWAL
 
 export type PaymentStatus = "PENDING_ACTION" | "PAID" | "FAILED" | "EXPIRED" | "CANCELLED";
 
-export type PaymentProvider = "MOCK" | "VIETQR";
+export type PaymentProvider = "MOCK" | "VNPAY" | "VIETQR";
 
 export type PaymentChannel = "CARD" | "BANK_QR" | "EWALLET";
 
@@ -371,6 +371,10 @@ export type CurrentUserResponse = {
 export type LoginPayload = {
   email: string;
   password: string;
+};
+
+export type GoogleLoginPayload = {
+  idToken: string;
 };
 
 export type RegisterPayload = {

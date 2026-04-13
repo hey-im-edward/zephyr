@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import {
   changePassword,
   getCurrentUser,
+  googleLogin,
   login,
   logout,
   refreshAuth,
@@ -15,6 +16,7 @@ import type {
   AuthResponse,
   AuthUser,
   ChangePasswordPayload,
+  GoogleLoginPayload,
   LoginPayload,
   ProfileUpdatePayload,
   RegisterPayload,
@@ -28,6 +30,7 @@ type AuthContextValue = {
   isAdmin: boolean;
   getAccessToken: () => Promise<string | null>;
   loginAction: (payload: LoginPayload) => Promise<AuthResponse>;
+  googleLoginAction: (payload: GoogleLoginPayload) => Promise<AuthResponse>;
   registerAction: (payload: RegisterPayload) => Promise<AuthResponse>;
   logoutAction: () => Promise<void>;
   reloadUser: () => Promise<AuthUser | null>;
@@ -218,6 +221,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getAccessToken: () => ensureAccessToken(session),
     loginAction: async (payload) => {
       const nextSession = await login(payload);
+      setSession(nextSession);
+      publishAuthSync({
+        action: "session-updated",
+        source: syncSourceRef.current,
+        at: Date.now(),
+      });
+      return nextSession;
+    },
+    googleLoginAction: async (payload) => {
+      const nextSession = await googleLogin(payload);
       setSession(nextSession);
       publishAuthSync({
         action: "session-updated",
